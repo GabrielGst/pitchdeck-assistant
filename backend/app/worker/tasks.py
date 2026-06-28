@@ -51,12 +51,70 @@ def process_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[mi
             session.commit()
             raise self.retry(exc=exc, countdown=30)
 
+    # Auto-index into corpus A (deal history) in the background
+    index_deal_into_corpus_a.delay(deck_id, tenant_id)
+
     # Publish extraction complete event so the SSE endpoint can begin streaming
     r = redis.Redis.from_url(settings.redis_url)
     r.publish(f"deck:{deck_id}:status", "EXTRACTION_COMPLETE")
     r.close()
 
     return {"deck_id": deck_id, "status": "processed"}
+
+
+@celery_app.task(name="worker.index_deal_into_corpus_a", bind=True, max_retries=3)
+def index_deal_into_corpus_a(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+    """
+    Embed a processed deck's text into corpus_a_chunks so future deals can
+    retrieve historical context. Runs after EXTRACTION_COMPLETE is published,
+    so the SSE analysis stream is not blocked by embedding latency.
+    """
+    import asyncio
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.core.config import settings
+    from app.models.base import Deal, Deck
+
+    engine = create_engine(settings.database_url_sync, echo=False)
+
+    with Session(engine) as session:
+        deck = session.get(Deck, uuid.UUID(deck_id))
+        if deck is None or not deck.extracted_text:
+            return {"error": "deck not found or has no text"}
+
+        # Find the associated deal for this deck
+        from sqlalchemy import select as sa_select
+        deal = session.execute(
+            sa_select(Deal).where(Deal.deck_id == uuid.UUID(deck_id))
+        ).scalar_one_or_none()
+        if deal is None:
+            return {"error": "deal not found for deck"}
+
+        deal_id_val = deal.id
+        text = deck.extracted_text
+
+    async def _embed_async() -> None:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        async_engine = create_async_engine(settings.database_url, echo=False)
+        async with AsyncSession(async_engine) as async_session:
+            from app.services.embedding_service import index_corpus_a
+            await index_corpus_a(
+                deal_id=deal_id_val,
+                deck_id=uuid.UUID(deck_id),
+                tenant_id=uuid.UUID(tenant_id),
+                text=text,
+                db=async_session,
+            )
+
+    try:
+        asyncio.run(_embed_async())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
+
+    return {"deck_id": deck_id, "status": "indexed_corpus_a"}
 
 
 @celery_app.task(name="worker.index_thesis_document", bind=True, max_retries=3)
