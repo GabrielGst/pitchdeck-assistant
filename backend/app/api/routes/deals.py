@@ -31,16 +31,19 @@ class DealsGrouped(BaseModel):
 @router.get("", response_model=list[DealOut])
 async def list_deals(
     stage: str | None = None,
+    q: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[DealOut]:
-    """List all deals for the current tenant, optionally filtered by stage."""
+    """List all deals for the current tenant, optionally filtered by stage or keyword."""
     query = select(Deal).where(Deal.tenant_id == user.tenant_id).order_by(Deal.created_at.desc())
     if stage:
         try:
             query = query.where(Deal.stage == DealStage(stage))
         except ValueError:
             raise HTTPException(status_code=422, detail=f"Invalid stage: {stage}")
+    if q:
+        query = query.where(Deal.company_name.ilike(f"%{q}%"))
 
     result = await db.execute(query)
     deals = result.scalars().all()

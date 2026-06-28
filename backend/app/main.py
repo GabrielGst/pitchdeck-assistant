@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.health import router as health_router
 from app.api.routes.deals import router as deals_router
 from app.api.routes.decks import router as decks_router
+from app.api.routes.pipeline import router as pipeline_router
+from app.api.routes.team import router as team_router
 from app.api.users import router as users_router
 from app.core.config import settings
 
@@ -25,3 +27,5 @@ app.include_router(health_router, tags=["system"])
 app.include_router(users_router)
 app.include_router(decks_router)
 app.include_router(deals_router)
+app.include_router(pipeline_router)
+app.include_router(team_router)
