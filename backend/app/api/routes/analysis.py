@@ -96,6 +96,24 @@ async def _stream_analysis(
 
     yield _sse("progress", {"stage": "starting"})
 
+    # Retrieve thesis context (corpus B) — empty string if corpus is empty or below threshold
+    from app.services import embedding_service
+    thesis_ctx = await embedding_service.retrieve_thesis_context(
+        query_text=deck.extracted_text or "",
+        tenant_id=user.tenant_id,
+        db=db,
+    )
+
+    # Retrieve comparable deals (corpus A) — empty string if no prior deals
+    deal_ctx = await embedding_service.retrieve_deal_context(
+        query_text=deck.extracted_text or "",
+        tenant_id=user.tenant_id,
+        exclude_deal_id=deal.id,
+        db=db,
+    )
+
+    combined_context = "\n\n".join(filter(None, [thesis_ctx, deal_ctx]))
+
     # Yield from sync generator in a thread pool to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue[tuple[str, object] | None] = asyncio.Queue()
@@ -106,6 +124,7 @@ async def _stream_analysis(
                 deck_text=deck.extracted_text or "",
                 deal_id=str(deal.id),
                 tenant_id=str(user.tenant_id),
+                thesis_context=combined_context,
             ):
                 asyncio.run_coroutine_threadsafe(queue.put((event, payload)), loop)
         finally:
