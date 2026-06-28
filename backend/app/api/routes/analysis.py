@@ -114,6 +114,12 @@ async def _stream_analysis(
 
     combined_context = "\n\n".join(filter(None, [thesis_ctx, deal_ctx]))
 
+    # Load custom scorecard dimensions for this tenant
+    from app.models.pipeline import TenantConfig
+    cfg_result = await db.execute(select(TenantConfig).where(TenantConfig.tenant_id == user.tenant_id))
+    tenant_cfg = cfg_result.scalar_one_or_none()
+    custom_dims = (tenant_cfg.custom_scorecard_dims or []) if tenant_cfg else []
+
     # Yield from sync generator in a thread pool to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue[tuple[str, object] | None] = asyncio.Queue()
@@ -125,6 +131,7 @@ async def _stream_analysis(
                 deal_id=str(deal.id),
                 tenant_id=str(user.tenant_id),
                 thesis_context=combined_context,
+                custom_dims=custom_dims,
             ):
                 asyncio.run_coroutine_threadsafe(queue.put((event, payload)), loop)
         finally:
