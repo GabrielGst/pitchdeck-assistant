@@ -1,0 +1,291 @@
+﻿Name,Alternatives Names,Category,Deployment Notes & File Structure,Description,Potential Alternatives (with main comparison),Programming Language,Resource Link,Role in VC Assistant Infrastructure,Short File/Config Template,Stack & Framework Integration
+Modal,Modal Labs; Modal Cloud,GPU Compute / Serverless,"Single file per job type. Recommended structure:
+infra/
+  modal/
+    finetune_job.py       # LoRA training function
+    inference_server.py   # vLLM serving endpoint
+    image_builder.py      # shared GPU Docker image def
+    utils.py              # S3 upload helpers",Serverless cloud platform for running GPU workloads on-demand. Spins up containers with GPU access in seconds and charges only for actual compute time used. No reserved instances.,RunPod: cheaper raw GPU hours but no Python-native decorator API — more manual pod management. Replicate: simpler model serving but less control over training pipelines. AWS SageMaker: more mature but significantly higher ops overhead and cost. Google Vertex AI: better GCP integration but heavier setup.,Python,https://modal.com/docs,"Runs fine-tuning jobs (LoRA/QLoRA) triggered when a tenant accumulates enough labeled data, and serves vLLM inference endpoints for custom fine-tuned models per tenant.","# finetune_job.py
+import modal
+app = modal.App(""vc-finetune"")
+gpu_image = modal.Image.debian_slim().pip_install(""transformers"",""peft"",""trl"")
+
+@app.function(gpu=""A100"", image=gpu_image, timeout=3600)
+def finetune(tenant_id: str):
+    # load base model, run LoRA fine-tune, push artifact to S3
+    pass","Integrates natively with Python via @app.function decorators. Works directly with HuggingFace Transformers, PEFT, TRL, and vLLM. Triggered from FastAPI background tasks (via Celery or direct async call). Artifacts pushed to S3 post-training."
+RunPod,RunPod Cloud; RunPod Serverless,GPU Compute / Cloud,"RunPod jobs are pod-based. Recommended structure:
+infra/
+  runpod/
+    Dockerfile            # GPU training image
+    train.py              # entry point script
+    runpod_dispatch.py    # API client to launch pods
+    pod_monitor.py        # poll status + collect results
+    requirements.txt","GPU cloud marketplace offering on-demand and spot GPU instances. Cheaper than AWS for raw GPU hours, with a GraphQL API for spinning up pods. Good for longer-running training jobs where Modal's per-second billing becomes costly.",Modal: better developer experience and Python-native API but more expensive for long-running jobs. AWS SageMaker: enterprise support and compliance but 3-5x the cost. Lambda Labs: similar pricing but smaller GPU selection. CoreWeave: better for very large scale but higher minimum commitment.,Python / REST API,https://docs.runpod.io,Alternative or complement to Modal for long fine-tuning runs (multi-hour) or persistent vLLM inference endpoints for tenants with high and predictable inference volume.,"# runpod_dispatch.py
+import runpod
+runpod.api_key = ""your-api-key""
+
+pod = runpod.create_pod(
+    name=f""finetune-{tenant_id}"",
+    image_name=""your-ecr/vc-trainer:latest"",
+    gpu_type_id=""NVIDIA A100 80GB PCIe"",
+    env={""TENANT_ID"": tenant_id, ""S3_BUCKET"": bucket}
+)",Controlled via GraphQL API or Python SDK (runpod-python). Integrates with S3 for artifact storage. Can run any Docker image — use the same image as Modal jobs for consistency. Pair with a job queue (Celery/Redis) in FastAPI to dispatch training jobs.
+LoRA,Low-Rank Adaptation; LoRA Adapter,Fine-Tuning Technique,"LoRA produces adapter files, not full models. Recommended structure:
+models/
+  base/                   # shared base model (once)
+  adapters/
+    tenant_a/
+      adapter_config.json
+      adapter_model.safetensors
+    tenant_b/
+      adapter_config.json
+      adapter_model.safetensors",Freezes pre-trained model weights and injects small trainable rank-decomposition matrices into transformer layers. Reduces trainable parameters by ~99% vs full fine-tuning — feasible on a single GPU. Each adapter is a small standalone file loadable on top of any compatible base model.,"Full fine-tuning: highest quality but requires 8x+ more VRAM and storage — impractical per-tenant. QLoRA: extends LoRA with 4-bit quantization for even lower VRAM — use when base model exceeds available GPU memory. Prefix Tuning: alternative PEFT method, worse performance than LoRA in practice. Adapter layers (Houlsby): older method, LoRA has superseded it for most use cases.",Python,https://huggingface.co/docs/peft/conceptual_guides/lora,"Core fine-tuning technique for per-tenant memo generation. Each VC client gets their own LoRA adapter (~50-300MB) trained on their analyst memos, stored in S3 and hot-swapped at inference time on top of a shared base model.","# lora_config.py
+from peft import LoraConfig
+config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=[""q_proj"", ""v_proj""],
+    lora_dropout=0.05,
+    bias=""none"",
+    task_type=""CAUSAL_LM""
+)","Used exclusively through Hugging Face PEFT library. Requires Transformers for base model loading. Integrates with TRL (SFTTrainer) for supervised fine-tuning. Adapters stored as safetensors files in S3, loaded at inference via PEFT's load_adapter()."
+QLoRA,Quantized LoRA; 4-bit LoRA,Fine-Tuning Technique,"Same adapter file structure as LoRA. Recommended structure:
+training/
+  qlora_train.py          # main training script
+  bnb_config.py           # BitsAndBytes config
+  data_loader.py          # tenant dataset loader
+  push_adapter.py         # S3 artifact upload
+  requirements.txt        # includes bitsandbytes",Extends LoRA by quantizing the frozen base model weights to 4-bit NF4 precision using bitsandbytes. Allows fine-tuning 70B parameter models on a single 48GB GPU that would otherwise require 4x A100s. Slight quality degradation vs full-precision LoRA.,"LoRA (full precision): higher quality output but requires 2-4x more VRAM — use when GPU budget allows. GPTQ fine-tuning: alternative quantization approach, less flexible than QLoRA. AWQ: newer quantization, better inference speed but less training ecosystem support. Full fine-tuning: maximum quality, requires a GPU cluster — not viable per-tenant.",Python,https://huggingface.co/blog/4bit-transformers-bitsandbytes,Used for fine-tuning larger base models (LLaMA 3 70B) for enterprise tenants who require higher output quality. Enables cost-effective training on smaller GPU instances available on Modal and RunPod.,"# qlora_setup.py
+from transformers import BitsAndBytesConfig
+import torch
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type=""nf4"",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+# Pass to AutoModelForCausalLM.from_pretrained()","Requires bitsandbytes library alongside PEFT and Transformers. Must be combined with LoraConfig (QLoRA is not a standalone method — it is LoRA + quantized base model). Compatible with TRL's SFTTrainer. GPU must support bfloat16 (A100, H100, RTX 3090+)."
+Hugging Face,HuggingFace; HF Hub; Transformers Hub,Model Hub / Ecosystem,"Hub artifacts stored in S3 or HF private repos. Recommended project structure:
+ml/
+  models/
+    download_base.py      # one-time base model pull
+    push_adapter.py       # upload tenant adapter to HF Hub
+  tokenizers/
+    tokenizer_utils.py    # shared tokenizer loading
+  configs/
+    model_config.yaml     # base model ID and settings","Central platform for open-source ML: model hub with 500k+ models, datasets repository, Spaces for demos, and the Transformers library. Industry-standard entry point for loading and sharing pre-trained models.","Ollama: simpler local model serving but no training ecosystem — suitable for local dev only, not production fine-tuning pipelines. Together AI: managed model hosting with fine-tuning API but less control and transparency. Replicate: model serving marketplace but no private artifact management. Unsloth: optimized fine-tuning framework that sits on top of HF, not a replacement.",Python,https://huggingface.co/docs,"Source of base models (Mistral 7B, LLaMA 3 8B/70B) used before per-tenant fine-tuning. Private repos store fine-tuned adapter artifacts per client. Tokenizers and model configs pulled at training and inference time.","# hf_load.py
+from transformers import AutoModelForCausalLM, AutoTokenizer
+model_id = ""mistralai/Mistral-7B-Instruct-v0.2""
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    device_map=""auto""
+)","Core dependency for the entire ML stack. Transformers library used in Modal/RunPod training jobs and vLLM inference servers. Hub Python client used to push/pull adapter artifacts. Integrates with PEFT, TRL, bitsandbytes, and Accelerate. Private model repos per tenant for artifact storage."
+PEFT,Parameter-Efficient Fine-Tuning; HF PEFT,Fine-Tuning Library,"PEFT is a library, not a service — no infra to deploy. Recommended usage structure:
+training/
+  peft_train.py           # adapter training entrypoint
+  peft_inference.py       # load adapter for serving
+  adapter_registry.py     # maps tenant_id to adapter S3 path
+  eval/
+    run_eval.py           # evaluate adapter quality post-training","Hugging Face library implementing LoRA, QLoRA, Prefix Tuning, IA3, and other efficient adaptation methods. Provides the get_peft_model() wrapper and adapter save/load utilities. The standard Python interface for all LoRA-based fine-tuning workflows.","Unsloth: faster LoRA training (2x speed, 60% less VRAM) but less flexible and fewer supported models — good for speed-critical pipelines. LlamaFactory: GUI-driven fine-tuning framework built on PEFT, easier for non-engineers. Axolotl: YAML-configured fine-tuning wrapper around PEFT, good for standardized training configs. TRL alone: focused on RLHF/reward modeling, not a PEFT replacement.",Python,https://huggingface.co/docs/peft,"Applied in Modal/RunPod training jobs to attach LoRA adapters to base models, run training, and save adapter weights to S3. Also used at inference time to load the correct tenant-specific adapter on top of the shared base model in vLLM.","# peft_train.py
+from peft import get_peft_model, LoraConfig
+from transformers import AutoModelForCausalLM
+base_model = AutoModelForCausalLM.from_pretrained(""mistralai/Mistral-7B-v0.1"")
+peft_config = LoraConfig(r=16, lora_alpha=32, task_type=""CAUSAL_LM"")
+model = get_peft_model(base_model, peft_config)
+model.print_trainable_parameters()","Direct dependency of LoRA and QLoRA workflows. Works with Transformers, TRL's SFTTrainer, and bitsandbytes. Adapters saved as safetensors files, versioned per tenant in S3 or HF Hub. At inference, model.load_adapter(tenant_path) hot-swaps the adapter without reloading base model weights."
+Terraform,Terraform IaC; OpenTofu; tf,Infrastructure as Code,"Recommended structure:
+infra/
+  terraform/
+    environments/
+      dev/main.tf
+      staging/main.tf
+      prod/main.tf
+    modules/
+      tenant/             # per-tenant S3 + KMS resources
+        main.tf
+        variables.tf
+        outputs.tf
+      eks_cluster/
+      ecs_service/
+    backend.tf            # S3 state backend config
+    variables.tf","Declares cloud infrastructure in .tf config files. Enables reproducible, version-controlled infrastructure across AWS/GCP/Azure. Plan/apply workflow shows changes before applying. State file tracks real-world resource mapping.","Pulumi: same IaC concept but in real programming languages (Python/TypeScript) — better if your team prefers code over HCL. AWS CDK: AWS-native IaC in TypeScript/Python but locked to AWS. Ansible: configuration management, not IaC — different scope. AWS CloudFormation: native but verbose and AWS-only. OpenTofu: open-source Terraform fork, drop-in replacement if HashiCorp licensing is a concern.",HCL (HashiCorp Configuration Language),https://developer.hashicorp.com/terraform/docs,"Provisions all cloud infrastructure: EKS clusters, ECS services, RDS instances, per-tenant S3 buckets, KMS encryption keys, VPCs, IAM roles, and security groups. Ensures dev/staging/prod environments are identical and auditable — critical for SOC 2 evidence.","# modules/tenant/main.tf
+resource ""aws_s3_bucket"" ""tenant_docs"" {
+  bucket = ""vc-${var.tenant_id}-docs""
+}
+resource ""aws_kms_key"" ""tenant_key"" {
+  description = ""KMS for tenant ${var.tenant_id}""
+}","Runs in CI/CD (GitHub Actions) on PR merge to provision or update infrastructure. State stored in S3 + DynamoDB lock table. Modules shared across environments via Terraform registry or local modules. Integrates with AWS provider for EKS, ECS, RDS, S3, KMS, and IAM resources."
+EKS,Elastic Kubernetes Service; AWS EKS; Managed Kubernetes,Container Orchestration,"Recommended structure:
+k8s/
+  namespaces/
+    tenant-template.yaml  # namespace + RBAC per tenant
+  deployments/
+    vc-api.yaml
+    doc-pipeline.yaml
+    vllm-server.yaml
+  services/
+    vc-api-svc.yaml
+  ingress/
+    alb-ingress.yaml
+  helm/
+    vc-platform/          # umbrella Helm chart","AWS managed Kubernetes service. Handles control plane provisioning, upgrades, and availability. Runs containerized workloads with auto-scaling, rolling deployments, per-namespace isolation, and service mesh support.","ECS: simpler AWS-native orchestration with less ops overhead — recommended before EKS for small teams. GKE (Google Kubernetes Engine): better Kubernetes experience than EKS but locks you to GCP. AKS (Azure): similar to EKS but Azure ecosystem. Self-managed K8s: full control but high ops burden — never worth it for a startup. ECS Fargate: serverless containers, good migration path from ECS to EKS.",YAML (config) / Python/Go (clients),https://docs.aws.amazon.com/eks,"Runs production platform services: FastAPI orchestration pods, document pipeline workers, reranking services, and vLLM inference servers. Per-tenant Kubernetes namespaces provide workload isolation. HPA auto-scales API pods during pitch deck processing peaks.","# k8s/deployments/vc-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vc-api
+  namespace: tenant-{{ TENANT_ID }}
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: api
+        image: your-ecr/vc-api:latest",Provisioned by Terraform (eks_cluster module). Applications deployed via Helm charts or kubectl manifests. Each tenant gets a dedicated namespace. Ingress via AWS ALB Ingress Controller. Secrets managed via AWS Secrets Manager + External Secrets Operator. CI/CD via GitHub Actions + Helm upgrade.
+ECS,Elastic Container Service; AWS ECS; ECS Fargate,Container Orchestration,"Recommended structure:
+infra/
+  ecs/
+    task-definitions/
+      vc-api.json
+      celery-worker.json
+      doc-pipeline.json
+    services/
+      vc-api-service.tf   # Terraform ECS service resource
+    ecr/
+      build-push.sh       # Docker build + ECR push script
+    appspec.yml           # CodeDeploy blue/green config",AWS-native container orchestration without Kubernetes. Runs Docker containers via EC2 or Fargate (serverless). Tighter AWS integration than EKS with significantly lower operational overhead. No cluster nodes to manage with Fargate.,"EKS: more powerful and portable but higher ops burden — migrate to EKS at scale. Google Cloud Run: similar serverless container model but GCP-only. Railway / Render: simpler PaaS options for very early stage but less control and compliance. Fly.io: good developer experience but not enterprise-ready. Nomad (HashiCorp): lighter orchestrator, less ecosystem support than Kubernetes.",JSON / YAML (task defs) / Python (boto3),https://docs.aws.amazon.com/ecs,"Recommended starting container platform for early-stage team. Runs FastAPI API service, Celery workers for async document processing, and scheduled fine-tuning trigger tasks. Migrate to EKS when per-tenant namespace isolation or custom scheduling is needed.","# ecs-task-definition.json (excerpt)
+{
+  ""family"": ""vc-api-task"",
+  ""requiresCompatibilities"": [""FARGATE""],
+  ""cpu"": ""1024"", ""memory"": ""2048"",
+  ""containerDefinitions"": [{
+    ""name"": ""vc-api"",
+    ""image"": ""your-ecr/vc-api:latest"",
+    ""portMappings"": [{""containerPort"": 8000}]
+  }]
+}",Provisioned by Terraform (ecs_service module). Task definitions stored as JSON in the repo and registered via CLI or Terraform. Service auto-scaling via Application Auto Scaling. Logs shipped to CloudWatch Logs. Secrets injected from AWS Secrets Manager into task environment at runtime.
+LaunchDarkly,LD; LaunchDarkly Feature Flags,Feature Flag Platform,"LaunchDarkly is SaaS — no deployment. Recommended code structure:
+app/
+  feature_flags/
+    ld_client.py          # singleton SDK init
+    flag_keys.py          # constants for all flag names
+    contexts.py           # tenant context builders
+    decorators.py         # @feature_flag() decorator for routes
+  config/
+    launchdarkly.yaml     # SDK key per environment","Enterprise feature flag and experimentation platform. Enables toggling features per user, tenant, or rollout percentage without code deployments. Supports A/B testing, kill switches, and gradual rollouts with real-time flag evaluation.","Statsig: cheaper at startup scale with stronger built-in product analytics — better first choice for early stage. Unleash: open-source self-hostable alternative, good for data-sensitive clients. Flagsmith: another open-source option with decent SaaS tier. GrowthBook: open-source, experiment-focused. ConfigCat: simpler and cheaper, fewer enterprise features. Split.io: similar to LaunchDarkly, slightly cheaper.",Python / TypeScript / Go (multi-language SDK),https://docs.launchdarkly.com,"Controls which tenants receive new features: new memo generation model versions, updated screening UI, experimental scoring algorithms. Enables safe rollout of a new fine-tuned adapter to one VC client before broad release. Kill switch for LLM features during incidents.","# ld_client.py
+import ldclient
+from ldclient.config import Config
+ldclient.set_config(Config(""sdk-key""))
+ld = ldclient.get()
+context = ldclient.Context.builder(tenant_id).kind(""tenant"").build()
+use_v2 = ld.variation(""use-v2-memo-model"", context, False)","SDKs available for Python (FastAPI backend), TypeScript (Next.js frontend), and Go. Evaluated server-side at request time using tenant context object. Flag state cached locally in SDK for low-latency evaluation. Integrates with Datadog and Statsig for metric correlation on flag changes."
+Statsig,Statsig Feature Gates; Statsig Experiments,Feature Flag / Experimentation Platform,"Statsig is SaaS — no deployment. Recommended code structure:
+app/
+  feature_flags/
+    statsig_client.py     # singleton init
+    gates.py              # gate name constants
+    experiments.py        # experiment config helpers
+    middleware.py         # FastAPI middleware for user context injection
+  config/
+    statsig.yaml          # server secret per environment","Modern feature flag and product experimentation platform. Combines feature gates, A/B experiments, and product analytics in one tool. More affordable than LaunchDarkly at startup scale with a generous free tier and strong built-in metrics.","LaunchDarkly: more mature enterprise features, better compliance documentation for large clients — migrate when enterprise sales requires it. Unleash: self-hosted option for data-sensitive environments. GrowthBook: stronger statistical experimentation framework but weaker feature flag UX. Split.io: similar positioning to Statsig, slightly more expensive. Optimizely: enterprise experimentation but overkill for infra-level flag use cases.",Python / TypeScript / Go (multi-language SDK),https://docs.statsig.com,"Same role as LaunchDarkly but preferred at early startup stage: per-tenant feature gates for model rollouts, A/B experiments on screening output quality, and product metric tracking. Built-in experiment analysis removes need for a separate analytics tool early on.","# statsig_client.py
+import statsig
+from statsig import StatsigUser
+statsig.initialize(""server-secret-key"")
+user = StatsigUser(user_id=tenant_id, custom={""plan"": ""enterprise""})
+if statsig.check_gate(user, ""new_scoring_model""):
+    score = score_v2(deck)",SDKs for Python backend and TypeScript frontend. Server-side evaluation recommended for LLM feature gates (never expose model routing logic to client). Integrates with Datadog for metric import. Experiment results viewable in Statsig console without additional BI tooling.
+APM,Application Performance Monitoring; Distributed Tracing; Observability,Observability Concept,"APM is a concept — agent deployed alongside app. Recommended structure:
+app/
+  observability/
+    tracing.py            # OTel tracer setup
+    metrics.py            # custom metric definitions
+    middleware.py         # FastAPI tracing middleware
+infra/
+  otel-collector/
+    otel-config.yaml      # collector pipeline config
+    deployment.yaml       # K8s collector deployment","The practice and tooling category for tracking service-level metrics: request latency, error rates, throughput, and resource usage across distributed services. Typically includes distributed tracing to follow a request across microservices. Implemented via agents or OpenTelemetry instrumentation.","Datadog APM: most complete but expensive. New Relic: similar to Datadog, competitive pricing. Dynatrace: AI-powered anomaly detection, enterprise-focused. Jaeger (open-source): distributed tracing only, no metrics. Zipkin: lightweight open-source tracing. OpenTelemetry: vendor-neutral instrumentation standard that feeds into any of the above backends — recommended as the instrumentation layer regardless of backend choice.",Python / Go / Java / TypeScript (language-specific agents),https://opentelemetry.io/docs,"General observability layer for FastAPI, Celery workers, and document pipeline services. Tracks request latency per endpoint, DB query performance, queue depth, and error rates. Distinct from LLM observability (LangSmith/Langfuse) which is prompt/token-aware — both layers are needed.","# tracing.py (OpenTelemetry)
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+FastAPIInstrumentor.instrument_app(app)
+SQLAlchemyInstrumentor().instrument(engine=engine)","Instrumented at the FastAPI application level via auto-instrumentation (ddtrace or opentelemetry-instrumentation-fastapi). SQLAlchemy, Redis, and Celery also auto-instrumented. Traces flow through API → worker → DB with a single trace ID. OpenTelemetry exporters allow switching backends without code changes."
+LangSmith,LangChain LangSmith; LS Tracing,LLM Observability,"LangSmith is SaaS — no deployment. Recommended code structure:
+app/
+  llm/
+    langsmith_config.py   # env var setup + project config
+    traceable_chains.py   # LangChain chains with auto-tracing
+    eval/
+      datasets.py         # golden dataset push to LangSmith
+      run_evals.py        # automated eval runner
+  config/
+    langsmith.env         # LANGCHAIN_API_KEY, PROJECT per env","LLM-native observability platform by LangChain. Traces every LLM call with full prompt, output, token counts, latency, and cost. Supports prompt versioning, dataset management, and automated evaluations against golden datasets.","Langfuse: open-source self-hostable alternative — preferred when client data sovereignty prohibits external SaaS. Helicone: simpler LLM proxy-based observability, less feature-rich. Weights & Biases (W&B): broader ML experiment tracking that includes LLM tracing — good if you already use W&B for model training. Arize Phoenix: open-source LLM observability with strong eval framework. Braintrust: evaluation-first platform, less strong on production tracing.",Python / TypeScript,https://docs.smith.langchain.com,"Traces all LLM calls in the orchestration layer: prompt version used, retrieved context, model output, latency, and cost per call. Essential for debugging poor memo quality, detecting prompt regressions after updates, and building evaluation datasets from production traces.","# langsmith_config.py
+import os
+os.environ[""LANGCHAIN_TRACING_V2""] = ""true""
+os.environ[""LANGCHAIN_API_KEY""] = ""ls-key""
+os.environ[""LANGCHAIN_PROJECT""] = ""vc-assistant-prod""
+# All LangChain calls now auto-traced","Auto-integrates with LangChain via environment variables — zero code change for LangChain-based pipelines. For non-LangChain LLM calls, wrap with RunTree or @traceable decorator. Traces organized by project (one per environment). Tenant ID passed as metadata on each trace for filtering."
+Langfuse,Langfuse OSS; LF Tracing; Open-source LangSmith,LLM Observability,"Self-hosted deployment. Recommended structure:
+infra/
+  langfuse/
+    helm-values.yaml      # Langfuse Helm chart config
+    postgres.tf           # RDS instance for Langfuse
+    secrets.yaml          # K8s secret for DB credentials
+app/
+  llm/
+    langfuse_client.py    # singleton Langfuse init
+    decorators.py         # @observe() wrappers per function
+    prompt_manager.py     # pull versioned prompts from Langfuse","Open-source, self-hostable LLM observability platform. Provides traces, prompt versioning, evals, and cost tracking. Can be deployed inside your own AWS VPC — critical when clients prohibit their query data from leaving your controlled infrastructure.","LangSmith: better UX and deeper LangChain integration but SaaS-only — eliminates it for data-sensitive clients. Helicone: proxy-based, simpler but less feature-rich and also SaaS. Arize Phoenix: stronger eval framework, self-hostable, good alternative. W&B Weave: self-hostable LLM tracing from Weights & Biases. OpenLLMetry: OpenTelemetry-based LLM instrumentation, outputs to any OTel backend.",Python / TypeScript,https://langfuse.com/docs,Preferred over LangSmith for clients with strict data sovereignty requirements. Deployed inside AWS VPC. Tracks LLM traces per tenant with tenant-scoped dashboards for cost chargeback. Also manages prompt versions across dev/staging/prod environments.,"# langfuse_client.py
+from langfuse import Langfuse
+from langfuse.decorators import observe
+langfuse = Langfuse(public_key=""pk"", secret_key=""sk"",
+                    host=""https://langfuse.internal.yourdomain.com"")
+@observe()
+def screen_deck(tenant_id: str, deck_text: str):
+    return llm.invoke(deck_text)",Python SDK with @observe() decorator for non-LangChain code. LangChain integration via CallbackHandler. Self-hosted on EKS/ECS using official Docker image and PostgreSQL backend. Deployed via Helm chart on EKS. Tenant ID injected as trace metadata for filtering and cost allocation per client.
+Datadog,DD; Datadog APM; Datadog Monitoring,Infrastructure Observability,"Recommended structure:
+infra/
+  datadog/
+    helm-values.yaml      # Datadog agent Helm config
+    monitors/
+      api_latency.tf      # Terraform-managed DD monitors
+      error_rate.tf
+    dashboards/
+      tenant_overview.json
+      llm_costs.json
+app/
+  observability/
+    dd_metrics.py         # custom metric helpers","Full-stack monitoring SaaS: infrastructure metrics, APM distributed tracing, log management, and alerting in a single platform. Industry standard for production B2B SaaS. Expensive but comprehensive with strong compliance reporting capabilities.","Grafana + Prometheus: open-source stack at a fraction of the cost — recommended if budget is constrained. New Relic: competitive all-in-one alternative, often cheaper. Dynatrace: stronger AI-powered anomaly detection but more expensive. AWS CloudWatch: native and cheap but poor UX and limited cross-service correlation. Elastic (ELK): strong log search but requires significant ops effort to maintain.",Python / Go / Ruby / Java / TypeScript (agents),https://docs.datadoghq.com,"Monitors all infrastructure: EKS node health, RDS performance, Redis queue depth, S3 costs per tenant, and API error rates. Provides the audit log trail and uptime evidence required for SOC 2 Type II. Alerts on SLA breaches. Cost allocation dashboards per tenant.","# helm-values.yaml (Datadog agent)
+datadog:
+  apiKey: DD_API_KEY
+  clusterName: vc-assistant-prod
+  logs:
+    enabled: true
+    containerCollectAll: true
+  apm:
+    enabled: true",Datadog Agent deployed as a DaemonSet on EKS via Helm chart. Auto-discovers pods and services. APM traces from FastAPI via ddtrace auto-instrumentation. Logs aggregated from all containers. Custom metrics via statsd or dogstatsd client. Tags align with tenant_id for per-tenant dashboards and cost allocation.
+Grafana,Grafana OSS; Grafana Cloud; Grafana + Prometheus Stack,Metrics Visualization,"Recommended structure:
+infra/
+  monitoring/
+    helm-values.yaml      # kube-prometheus-stack config
+    loki-values.yaml      # Loki log aggregation config
+    dashboards/
+      tenant_usage.json   # per-tenant metrics dashboard
+      llm_pipeline.json   # document pipeline health
+      infra_overview.json # cluster-wide health
+    alerts/
+      api_latency.yaml    # PrometheusRule alerts
+      error_budget.yaml","Open-source dashboarding and visualization platform. Connects to Prometheus, CloudWatch, Loki, Tempo, and 50+ data sources. Core component of the open-source observability stack (Prometheus metrics + Loki logs + Tempo traces + Grafana UI).","Datadog: all-in-one with better UX and compliance reporting but 10x the cost — upgrade when SOC 2 enterprise clients require it. New Relic: SaaS alternative with free tier. Grafana Cloud: managed version of the open-source stack — removes infra management overhead while keeping the UI. AWS Managed Grafana: native AWS integration, reduces self-hosting burden but AWS lock-in.",Go (server) / TypeScript (UI) / PromQL (queries),https://grafana.com/docs,"Cost-effective Datadog alternative for infrastructure dashboards and alerting. Paired with Prometheus for EKS metrics and Loki for log aggregation. Builds per-tenant usage dashboards (decks processed, LLM calls, cost per tenant) and operational health views for the engineering team.","# helm-values.yaml (kube-prometheus-stack)
+grafana:
+  adminPassword: admin
+  persistence:
+    enabled: true
+prometheus:
+  prometheusSpec:
+    retention: 30d
+alertmanager:
+  config:
+    receivers:
+    - name: pagerduty
+      pagerduty_configs:
+      - routing_key: PD_KEY",Deployed on EKS via Helm (kube-prometheus-stack chart installs Prometheus + Grafana + Alertmanager together). Prometheus scrapes metrics from all pods via annotations. Loki deployed separately for log ingestion. Tempo for distributed traces. All three connect as data sources in Grafana. Dashboards version-controlled as JSON in the repo.
