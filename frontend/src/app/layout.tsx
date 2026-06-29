@@ -1,9 +1,10 @@
-import { ClerkProvider } from "@clerk/nextjs";
+import { ClerkProvider, SignedIn } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import "./globals.css";
+import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Pitchdeck Assistant",
+  title: "VC Pipeline",
   description: "AI-powered pitch deck analysis for investors",
 };
 
@@ -12,6 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <ClerkProvider>
       <html lang="en">
         <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+          <SignedIn>
+            <Navbar />
+          </SignedIn>
           {children}
         </body>
       </html>

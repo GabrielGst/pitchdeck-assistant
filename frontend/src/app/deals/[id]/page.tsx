@@ -1,13 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { AnalysisStream } from "@/components/AnalysisStream";
 import { OutcomeActions } from "@/components/OutcomeActions";
+import { StageSelector } from "@/components/StageSelector";
 import { apiFetch } from "@/lib/api";
 
 interface DealDetail {
   id: string;
   company_name: string;
   stage: string;
+  deck_status: string;
 }
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,27 +27,31 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <main className="min-h-screen p-8">
+    <main className="p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <a href="/pipeline" className="text-sm text-gray-400 hover:text-gray-600">
+          <div className="flex items-center gap-4 min-w-0">
+            <Link href="/pipeline" className="shrink-0 text-sm text-gray-400 hover:text-gray-600 transition-colors">
               ← Pipeline
-            </a>
-            <div>
-              <h1 className="text-2xl font-bold">{deal?.company_name}</h1>
-              <span className="text-xs text-gray-400 uppercase tracking-wide">
-                {deal?.stage.replace("_", " ")}
-              </span>
+            </Link>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold truncate">{deal?.company_name}</h1>
+              <div className="mt-1">
+                {deal && (
+                  <StageSelector dealId={deal.id} currentStage={deal.stage} />
+                )}
+              </div>
             </div>
           </div>
           {deal && (
-            <OutcomeActions dealId={deal.id} currentStage={deal.stage} token={token!} />
+            <div className="shrink-0">
+              <OutcomeActions dealId={deal.id} currentStage={deal.stage} />
+            </div>
           )}
         </div>
 
-        {/* Analysis — streams live from SSE */}
+        {/* Analysis */}
         <AnalysisStream dealId={id} token={token} />
       </div>
     </main>
