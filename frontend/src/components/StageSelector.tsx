@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 const STAGES = [
   { value: "inbox", label: "Inbox" },
@@ -12,13 +20,13 @@ const STAGES = [
   { value: "passed", label: "Passed" },
 ];
 
-const STAGE_COLORS: Record<string, string> = {
-  inbox: "bg-gray-100 text-gray-700",
+const STAGE_CLASSES: Record<string, string> = {
+  inbox: "bg-muted text-muted-foreground",
   screening: "bg-blue-50 text-blue-700",
   due_diligence: "bg-purple-50 text-purple-700",
   partner_review: "bg-amber-50 text-amber-700",
   invested: "bg-emerald-50 text-emerald-700",
-  passed: "bg-red-50 text-red-700",
+  passed: "bg-red-50 text-red-600",
 };
 
 const API = "/api";
@@ -34,11 +42,8 @@ export function StageSelector({ dealId, currentStage, onStageChange }: Props) {
   const [loading, setLoading] = useState(false);
   const { getToken } = useAuth();
 
-  const label = STAGES.find((s) => s.value === stage)?.label ?? stage.replace(/_/g, " ");
-  const colorClass = STAGE_COLORS[stage] ?? "bg-gray-100 text-gray-700";
-
-  async function handleChange(newStage: string) {
-    if (newStage === stage || loading) return;
+  async function handleChange(newStage: string | null) {
+    if (!newStage || newStage === stage || loading) return;
     setLoading(true);
     const prev = stage;
     setStage(newStage);
@@ -58,24 +63,26 @@ export function StageSelector({ dealId, currentStage, onStageChange }: Props) {
     }
   }
 
+  const colorClass = STAGE_CLASSES[stage] ?? STAGE_CLASSES.inbox;
+
   return (
-    <div className="relative inline-flex items-center">
-      <span className={`absolute left-2 h-1.5 w-1.5 rounded-full ${loading ? "animate-pulse bg-gray-400" : colorClass.split(" ")[1].replace("text", "bg")}`} />
-      <select
-        value={stage}
-        onChange={(e) => handleChange(e.target.value)}
-        disabled={loading}
-        className={`pl-5 pr-7 py-1 rounded-full text-xs font-medium border-0 cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 transition-opacity ${colorClass} ${loading ? "opacity-60" : ""}`}
+    <Select value={stage} onValueChange={handleChange} disabled={loading}>
+      <SelectTrigger
+        className={cn(
+          "h-7 w-auto min-w-28 rounded-full border-0 px-3 text-xs font-medium shadow-none focus:ring-1",
+          colorClass,
+          loading && "opacity-60"
+        )}
       >
-        {STAGES.map(({ value, label: lbl }) => (
-          <option key={value} value={value}>{lbl}</option>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {STAGES.map(({ value, label }) => (
+          <SelectItem key={value} value={value} className="text-sm">
+            {label}
+          </SelectItem>
         ))}
-      </select>
-      <span className="absolute right-2 pointer-events-none text-current opacity-50">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="currentColor" className="w-2.5 h-2.5">
-          <path d="M6 8L1 3h10L6 8z"/>
-        </svg>
-      </span>
-    </div>
+      </SelectContent>
+    </Select>
   );
 }

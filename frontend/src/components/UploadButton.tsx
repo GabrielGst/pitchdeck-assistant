@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 
 const ACCEPTED = ".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 const API = "/api";
@@ -41,7 +43,7 @@ export function UploadButton() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div className="flex flex-col items-end gap-1.5">
       <input
         ref={inputRef}
         type="file"
@@ -53,14 +55,14 @@ export function UploadButton() {
           e.target.value = "";
         }}
       />
-      <button
+      <Button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
       >
+        <Upload className="h-4 w-4" />
         {uploading ? "Uploading…" : "Upload Deck"}
-      </button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      </Button>
+      {error && <p className="text-xs text-destructive text-right">{error}</p>}
     </div>
   );
 }

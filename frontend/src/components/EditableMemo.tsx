@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface EditableMemoProps {
   dealId: string;
@@ -48,39 +50,47 @@ export function EditableMemo({ dealId, initialText }: EditableMemoProps) {
     saveTimerRef.current = setTimeout(() => save(value), 2000);
   };
 
-  return (
-    <div className="relative">
-      {editing ? (
-        <>
-          <textarea
-            ref={textareaRef}
-            className="w-full min-h-[400px] rounded-lg border border-blue-300 bg-white p-6 font-sans text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
-            value={text}
-            onChange={handleChange}
-            onBlur={() => {
-              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              save(text).then(() => setEditing(false));
-            }}
-            autoFocus
-          />
-          <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-            {saving && <span>Saving…</span>}
-            {!saving && saved && <span className="text-green-600">Saved</span>}
-            <span className="ml-auto">Click outside to finish</span>
-          </div>
-        </>
-      ) : (
-        <div
-          className="group relative cursor-text rounded-lg border border-gray-200 bg-white p-6 hover:border-blue-300 transition-colors"
-          onClick={() => setEditing(true)}
-          title="Click to edit"
-        >
-          <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800">{text}</pre>
-          <span className="absolute top-2 right-2 hidden rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 group-hover:block">
-            Edit
-          </span>
+  if (editing) {
+    return (
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          className={cn(
+            "w-full min-h-96 rounded-lg border bg-card px-6 py-5 font-sans text-sm text-foreground",
+            "focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring resize-y",
+            "border-primary/40"
+          )}
+          value={text}
+          onChange={handleChange}
+          onBlur={() => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            save(text).then(() => setEditing(false));
+          }}
+          autoFocus
+        />
+        <div className="flex items-center mt-1.5 text-xs text-muted-foreground">
+          {saving && <span>Saving…</span>}
+          {!saving && saved && <span className="text-emerald-600">Saved</span>}
+          <span className="ml-auto">Click outside to finish</span>
         </div>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card
+      className="group cursor-text hover:border-primary/40 transition-colors"
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+    >
+      <CardContent className="relative pt-5 pb-5">
+        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
+          {text}
+        </pre>
+        <span className="absolute top-3 right-3 hidden rounded bg-primary/10 px-2 py-0.5 text-xs text-primary group-hover:block">
+          Edit
+        </span>
+      </CardContent>
+    </Card>
   );
 }

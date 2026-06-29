@@ -2,6 +2,12 @@ import { ClerkProvider, SignedIn } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
+import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "VC Pipeline",
@@ -11,12 +17,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
-          <SignedIn>
-            <Navbar />
-          </SignedIn>
-          {children}
+      <html lang="en" className={cn("font-sans", inter.variable)}>
+        <body className="min-h-screen bg-background text-foreground antialiased">
+          <TooltipProvider>
+            <SignedIn>
+              <Navbar />
+            </SignedIn>
+            {children}
+            <Toaster />
+          </TooltipProvider>
         </body>
       </html>
     </ClerkProvider>

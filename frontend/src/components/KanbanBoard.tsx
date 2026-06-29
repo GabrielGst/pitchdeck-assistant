@@ -3,6 +3,11 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Trash2, GripVertical } from "lucide-react";
 
 interface Deal {
   id: string;
@@ -38,26 +43,16 @@ const DEFAULT_STAGE_ORDER = [
 
 function DeckBadge({ status }: { status: string }) {
   if (status === "processed") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Ready
-      </span>
-    );
+    return <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">Ready</Badge>;
   }
   if (status === "failed") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
-        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-        Failed
-      </span>
-    );
+    return <Badge variant="outline" className="text-xs text-destructive border-destructive/20 bg-destructive/5">Failed</Badge>;
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+    <Badge variant="outline" className="text-xs text-amber-600 border-amber-200 bg-amber-50">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse mr-1" />
       Processing
-    </span>
+    </Badge>
   );
 }
 
@@ -80,7 +75,6 @@ export function KanbanBoard({ columns: initialColumns, stageOrder, stageLabels }
 
   async function moveCard(dealId: string, fromStage: string, toStage: string) {
     if (fromStage === toStage) return;
-
     setColumns((prev) => {
       const deal = prev.find((c) => c.stage === fromStage)?.deals.find((d) => d.id === dealId);
       if (!deal) return prev;
@@ -91,7 +85,6 @@ export function KanbanBoard({ columns: initialColumns, stageOrder, stageLabels }
         return col;
       });
     });
-
     try {
       const token = await getToken();
       const res = await fetch(`${API}/deals/${dealId}/stage`, {
@@ -145,28 +138,31 @@ export function KanbanBoard({ columns: initialColumns, stageOrder, stageLabels }
             }
           }}
         >
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">
+          <div className="mb-2 flex items-center justify-between px-0.5">
+            <h3 className="text-sm font-semibold text-foreground">
               {labels[col.stage] ?? col.stage}
             </h3>
-            <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+            <Badge variant="secondary" className="text-xs tabular-nums">
               {col.deals.length}
-            </span>
+            </Badge>
           </div>
 
           <div
-            className={`space-y-2 min-h-[4rem] rounded-lg p-2 transition-colors ${
-              dragOverStage === col.stage ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : "bg-gray-100"
-            }`}
+            className={cn(
+              "space-y-2 min-h-16 rounded-lg p-2 transition-colors",
+              dragOverStage === col.stage
+                ? "bg-primary/5 ring-2 ring-primary/30 ring-inset"
+                : "bg-muted/50"
+            )}
           >
             {col.deals.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">
+              <p className="text-xs text-muted-foreground text-center py-4">
                 {dragOverStage === col.stage ? "Drop here" : "Empty"}
               </p>
             )}
 
             {col.deals.map((deal) => (
-              <div
+              <Card
                 key={deal.id}
                 draggable
                 onDragStart={() => {
@@ -176,58 +172,62 @@ export function KanbanBoard({ columns: initialColumns, stageOrder, stageLabels }
                   dragInfo.current = null;
                   setDragOverStage(null);
                 }}
-                className="group rounded-md bg-white border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing select-none"
+                className="group cursor-grab active:cursor-grabbing select-none shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start gap-2">
-                  {/* Main clickable area */}
-                  <button
-                    onClick={() => router.push(`/deals/${deal.id}`)}
-                    className="flex-1 text-left min-w-0"
-                  >
-                    <p className="text-sm font-medium text-gray-900 truncate">{deal.company_name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(deal.created_at).toLocaleDateString("en-GB", {
-                        day: "2-digit", month: "short", year: "numeric",
-                      })}
-                    </p>
-                  </button>
-
-                  {/* Delete control */}
-                  <div className="shrink-0 flex flex-col items-end gap-1">
-                    {confirmDelete === deal.id ? (
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => deleteDeal(deal.id)}
-                          className="text-xs text-white bg-red-500 hover:bg-red-600 rounded px-1.5 py-0.5 font-medium"
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-1.5">
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
+                    <button
+                      onClick={() => router.push(`/deals/${deal.id}`)}
+                      className="flex-1 text-left min-w-0"
+                    >
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {deal.company_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {new Date(deal.created_at).toLocaleDateString("en-GB", {
+                          day: "2-digit", month: "short", year: "numeric",
+                        })}
+                      </p>
+                    </button>
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {confirmDelete === deal.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => deleteDeal(deal.id)}
+                          >
+                            Delete
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setConfirmDelete(null)}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          onClick={() => setConfirmDelete(deal.id)}
+                          title="Delete deal"
                         >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => setConfirmDelete(null)}
-                          className="text-xs text-gray-400 hover:text-gray-600 px-0.5"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(deal.id); }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 leading-none"
-                        title="Delete deal"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                          <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    )}
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {/* Deck status */}
-                <div className="mt-2">
-                  <DeckBadge status={deal.deck_status} />
-                </div>
-              </div>
+                  <div className="mt-2 ml-5">
+                    <DeckBadge status={deal.deck_status} />
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface ScoreDim {
   key: string;
@@ -19,10 +23,16 @@ interface DDItem {
 
 type Stage = "idle" | "scorecard" | "dd_questions" | "memo" | "complete" | "error";
 
-const RISK_COLORS = {
-  high: "bg-red-50 border-red-200 text-red-800",
-  medium: "bg-yellow-50 border-yellow-200 text-yellow-800",
-  low: "bg-green-50 border-green-200 text-green-800",
+const RISK_CLASSES = {
+  high: "border-red-200 bg-red-50 text-red-800",
+  medium: "border-amber-200 bg-amber-50 text-amber-800",
+  low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+const RISK_BADGE_CLASSES = {
+  high: "bg-red-100 text-red-700",
+  medium: "bg-amber-100 text-amber-700",
+  low: "bg-emerald-100 text-emerald-700",
 };
 
 const DIM_LABELS: Record<string, string> = {
@@ -37,16 +47,19 @@ const DIM_LABELS: Record<string, string> = {
 
 function ScoreBar({ score }: { score: number }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 mt-1.5">
       <div className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <div
             key={n}
-            className={`h-2 w-5 rounded-sm ${n <= score ? "bg-blue-500" : "bg-gray-200"}`}
+            className={cn(
+              "h-2 w-5 rounded-sm transition-colors",
+              n <= score ? "bg-primary" : "bg-muted"
+            )}
           />
         ))}
       </div>
-      <span className="text-xs text-gray-500">{score}/5</span>
+      <span className="text-xs text-muted-foreground tabular-nums">{score}/5</span>
     </div>
   );
 }
@@ -82,7 +95,7 @@ function useEngagementTracker(dealId: string, analysisComplete: boolean) {
         keepalive: true,
       });
     } catch {
-      // best-effort: drop on failure, not user-facing
+      // best-effort: drop on failure
     }
   }
 
@@ -168,7 +181,6 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
       const token = await getToken();
       if (cancelled) return;
 
-      // Pre-check: skip stream if analysis already complete
       try {
         const res = await fetch(`/api/analysis/${dealId}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -193,7 +205,6 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
     }
 
     function startStream(): EventSource {
-      // Token not needed in URL — SSE Route Handler handles auth via Clerk cookie
       const source = new EventSource(`/api/analysis/${dealId}/stream`);
 
       source.addEventListener("progress", (e) => {
@@ -271,38 +282,69 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
     error: "Analysis failed",
   };
 
+  const loading = stage !== "complete" && stage !== "error";
+
   return (
-    <div className="space-y-8">
-      {stage !== "complete" && stage !== "error" && (
-        <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-          <p className="text-sm text-blue-700">{progressLabel[stage]}</p>
-        </div>
+    <div className="space-y-6">
+      {loading && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex items-center gap-3 py-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent shrink-0" />
+            <p className="text-sm text-primary font-medium">{progressLabel[stage]}</p>
+          </CardContent>
+        </Card>
       )}
 
       {error && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <Card className="border-destructive/20 bg-destructive/5">
+          <CardContent className="py-3">
+            <p className="text-sm text-destructive">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Scorecard skeleton while loading */}
+      {loading && scorecard.length === 0 && stage !== "idle" && (
+        <section>
+          <h2 className="text-base font-semibold mb-3">Scorecard</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((n) => (
+              <Card key={n}>
+                <CardContent className="pt-4 pb-4 space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-2 w-32" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-3/4" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
 
       {scorecard.length > 0 && (
         <section ref={scorecardRef}>
-          <h2 className="text-lg font-semibold mb-3">Scorecard</h2>
+          <h2 className="text-base font-semibold mb-3">Scorecard</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {scorecard.map((dim) => (
-              <div key={dim.key} className="rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">
+              <Card key={dim.key}>
+                <CardHeader className="pb-1 pt-4">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
                     {DIM_LABELS[dim.key] ?? dim.key}
                     {dim.is_custom && (
-                      <span className="ml-1 text-xs text-purple-600">(custom)</span>
+                      <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">custom</Badge>
                     )}
-                  </span>
-                </div>
-                <ScoreBar score={dim.score} />
-                {dim.rationale && (
-                  <p className="text-xs text-gray-500 mt-2">{dim.rationale}</p>
-                )}
-              </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 pb-4">
+                  <ScoreBar score={dim.score} />
+                  {dim.rationale && (
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {dim.rationale}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             ))}
           </div>
         </section>
@@ -310,18 +352,28 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
 
       {ddQuestions.length > 0 && (
         <section ref={ddRef}>
-          <h2 className="text-lg font-semibold mb-3">Due Diligence Questions</h2>
+          <h2 className="text-base font-semibold mb-3">Due Diligence Questions</h2>
           <ul className="space-y-2">
             {ddQuestions.map((item, i) => (
               <li
                 key={i}
-                onClick={() => enqueue({ event_type: "dd_question_clicked", section: "dd_questions", value: item.position })}
-                className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm cursor-default ${RISK_COLORS[item.risk_level]}`}
+                onClick={() =>
+                  enqueue({ event_type: "dd_question_clicked", section: "dd_questions", value: item.position })
+                }
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm cursor-default",
+                  RISK_CLASSES[item.risk_level]
+                )}
               >
-                <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium uppercase">
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase",
+                    RISK_BADGE_CLASSES[item.risk_level]
+                  )}
+                >
                   {item.risk_level}
                 </span>
-                <span>{item.question}</span>
+                <span className="leading-relaxed">{item.question}</span>
               </li>
             ))}
           </ul>
@@ -330,11 +382,15 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
 
       {memo && (
         <section ref={memoSectionRef}>
-          <h2 className="text-lg font-semibold mb-3">Investment Memo</h2>
-          <div className="prose prose-sm max-w-none rounded-lg border border-gray-200 bg-white p-6">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800">{memo}</pre>
-            <div ref={memoRef} />
-          </div>
+          <h2 className="text-base font-semibold mb-3">Investment Memo</h2>
+          <Card>
+            <CardContent className="pt-5 pb-5">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
+                {memo}
+              </pre>
+              <div ref={memoRef} />
+            </CardContent>
+          </Card>
         </section>
       )}
     </div>

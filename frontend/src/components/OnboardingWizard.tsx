@@ -4,6 +4,10 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AnalysisStream } from "@/components/AnalysisStream";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Check, FileText } from "lucide-react";
 
 type WizardStep = "upload" | "analyse" | "complete";
 
@@ -27,29 +31,32 @@ function ProgressBar({ current }: { current: WizardStep }) {
           <div key={step.id} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                className={cn(
+                  "h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors",
                   done
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary text-primary-foreground"
                     : active
-                    ? "bg-blue-600 text-white ring-4 ring-blue-100"
-                    : "bg-gray-200 text-gray-400"
-                }`}
+                    ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                    : "bg-muted text-muted-foreground"
+                )}
               >
-                {done ? "✓" : i + 1}
+                {done ? <Check className="h-4 w-4" /> : i + 1}
               </div>
               <span
-                className={`text-xs font-medium ${
-                  active ? "text-blue-600" : done ? "text-gray-600" : "text-gray-400"
-                }`}
+                className={cn(
+                  "text-xs font-medium",
+                  active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground"
+                )}
               >
                 {step.label}
               </span>
             </div>
             {i < STEPS.length - 1 && (
               <div
-                className={`h-0.5 w-16 sm:w-24 mx-2 mb-5 transition-colors ${
-                  i < idx ? "bg-blue-600" : "bg-gray-200"
-                }`}
+                className={cn(
+                  "h-0.5 w-16 sm:w-24 mx-2 mb-5 transition-colors",
+                  i < idx ? "bg-primary" : "bg-muted"
+                )}
               />
             )}
           </div>
@@ -89,7 +96,6 @@ export function OnboardingWizard() {
         throw new Error(body.detail ?? "Upload failed");
       }
       const deck = await res.json();
-
       const name = file.name.replace(/\.(pdf|pptx)$/i, "");
       setCompanyName(name);
       setDealId(deck.deal_id);
@@ -109,112 +115,105 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         <ProgressBar current={step} />
 
-        {/* ── Step 1: Upload ───────────────────────────────────────────── */}
         {step === "upload" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Upload your first pitch deck
-            </h1>
-            <p className="text-gray-500 mb-8">
-              Drop a PDF or PPTX and the AI will score it, generate due diligence
-              questions and write an investment memo — live.
-            </p>
-
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPTED}
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-                e.target.value = "";
-              }}
-            />
-
-            <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={`w-full rounded-xl border-2 border-dashed px-8 py-12 transition-colors cursor-pointer ${
-                dragging
-                  ? "border-blue-400 bg-blue-50"
-                  : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
-              } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {uploading ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                  <p className="text-sm text-blue-600 font-medium">Uploading…</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="text-4xl">📄</div>
-                  <p className="text-sm font-medium text-gray-700">
-                    Drag & drop or <span className="text-blue-600">browse</span>
-                  </p>
-                  <p className="text-xs text-gray-400">PDF or PPTX · up to 50 MB</p>
-                </div>
-              )}
-            </button>
-
-            {error && (
-              <p className="mt-4 text-sm text-red-600">{error}</p>
-            )}
-          </div>
-        )}
-
-        {/* ── Step 2: Analyse ──────────────────────────────────────────── */}
-        {step === "analyse" && dealId && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Analysing {companyName}</h1>
-              <p className="text-gray-500 text-sm mt-1">
-                The AI is scoring the deck, generating due diligence questions and
-                writing an investment memo. This takes about 60–90 seconds.
+          <Card className="p-10 text-center">
+            <CardContent className="p-0">
+              <h1 className="text-2xl font-bold mb-2">Upload your first pitch deck</h1>
+              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                Drop a PDF or PPTX and the AI will score it, generate due diligence
+                questions and write an investment memo — live.
               </p>
-            </div>
-            {dealId && (
-              <AnalysisStream
-                dealId={dealId}
-                onComplete={() => setStep("complete")}
+
+              <input
+                ref={inputRef}
+                type="file"
+                accept={ACCEPTED}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                  e.target.value = "";
+                }}
               />
-            )}
-          </div>
+
+              <button
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                className={cn(
+                  "w-full rounded-xl border-2 border-dashed px-8 py-12 transition-colors cursor-pointer",
+                  dragging
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50 hover:bg-muted/50",
+                  uploading && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <p className="text-sm text-primary font-medium">Uploading…</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <FileText className="h-10 w-10 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">
+                      Drag & drop or{" "}
+                      <span className="text-primary">browse</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">PDF or PPTX · up to 50 MB</p>
+                  </div>
+                )}
+              </button>
+
+              {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+            </CardContent>
+          </Card>
         )}
 
-        {/* ── Step 3: Complete ─────────────────────────────────────────── */}
+        {step === "analyse" && dealId && (
+          <Card className="p-8">
+            <CardContent className="p-0">
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold">Analysing {companyName}</h1>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Scoring the deck, generating due diligence questions and writing an
+                  investment memo. This takes about 60–90 seconds.
+                </p>
+              </div>
+              <AnalysisStream dealId={dealId} onComplete={() => setStep("complete")} />
+            </CardContent>
+          </Card>
+        )}
+
         {step === "complete" && dealId && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">
-            <div className="text-5xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {companyName} is in your pipeline
-            </h1>
-            <p className="text-gray-500 mb-8 max-w-sm mx-auto">
-              The scorecard, due diligence questions and investment memo are saved.
-              Upload more decks or explore the full analysis now.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => router.push(`/deals/${dealId}`)}
-                className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                View full analysis
-              </button>
-              <button
-                onClick={() => router.push("/pipeline")}
-                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-              >
-                Explore Pipeline →
-              </button>
-            </div>
-          </div>
+          <Card className="p-10 text-center">
+            <CardContent className="p-0">
+              <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+                <Check className="h-7 w-7 text-emerald-600" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2">
+                {companyName} is in your pipeline
+              </h1>
+              <p className="text-muted-foreground mb-8 max-w-sm mx-auto">
+                The scorecard, due diligence questions and investment memo are saved.
+                Upload more decks or explore the full analysis now.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button variant="outline" onClick={() => router.push(`/deals/${dealId}`)}>
+                  View full analysis
+                </Button>
+                <Button onClick={() => router.push("/pipeline")}>
+                  Explore Pipeline
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

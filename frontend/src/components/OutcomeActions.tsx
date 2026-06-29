@@ -2,6 +2,18 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface Props {
   dealId: string;
@@ -20,11 +32,17 @@ export function OutcomeActions({ dealId, currentStage }: Props) {
   const { getToken } = useAuth();
 
   if (TERMINAL.has(stage)) {
-    const color = stage === "invested" ? "text-emerald-600" : "text-red-500";
     return (
-      <span className={`text-sm font-medium ${color}`}>
+      <Badge
+        variant="outline"
+        className={cn(
+          stage === "invested"
+            ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+            : "text-red-600 border-red-200 bg-red-50"
+        )}
+      >
         {stage === "invested" ? "Invested" : "Passed"}
-      </span>
+      </Badge>
     );
   }
 
@@ -53,59 +71,73 @@ export function OutcomeActions({ dealId, currentStage }: Props) {
     }
   }
 
-  if (pending) {
-    return (
-      <div className="flex flex-col gap-2 max-w-xs">
-        <p className="text-sm font-medium">
-          Mark as{" "}
-          <span className={pending === "invested" ? "text-emerald-600" : "text-red-500"}>
-            {pending === "invested" ? "Invested" : "Passed"}
-          </span>
-        </p>
-        <textarea
-          className="border border-gray-200 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
-          rows={2}
-          placeholder={pending === "passed" ? "Reason for passing (optional)" : "Note (optional)"}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={() => submit(pending)}
-            disabled={!!busy}
-            className={`px-3 py-1.5 rounded text-sm font-medium text-white disabled:opacity-50 ${
-              pending === "invested" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"
-            }`}
-          >
-            {busy ? "Saving…" : "Confirm"}
-          </button>
-          <button
-            onClick={() => { setPending(null); setNote(""); }}
-            className="px-3 py-1.5 rounded text-sm text-gray-500 hover:text-gray-700"
-          >
-            Cancel
-          </button>
-        </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
-      </div>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => setPending("invested")}
-        className="px-3 py-1.5 rounded border border-emerald-300 text-sm text-emerald-700 hover:bg-emerald-50 font-medium transition-colors"
-      >
-        Invest
-      </button>
-      <button
-        onClick={() => setPending("passed")}
-        className="px-3 py-1.5 rounded border border-red-200 text-sm text-red-500 hover:bg-red-50 font-medium transition-colors"
-      >
-        Pass
-      </button>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPending("invested")}
+          className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+        >
+          Invest
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPending("passed")}
+          className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+        >
+          Pass
+        </Button>
+      </div>
+
+      <Dialog open={!!pending} onOpenChange={(open) => { if (!open) { setPending(null); setNote(""); setError(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              Mark as{" "}
+              <span className={pending === "invested" ? "text-emerald-700" : "text-red-600"}>
+                {pending === "invested" ? "Invested" : "Passed"}
+              </span>
+            </DialogTitle>
+            <DialogDescription>
+              {pending === "passed"
+                ? "Optionally record why this deal was passed."
+                : "Optionally add a note for this investment decision."}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder={pending === "passed" ? "Reason for passing (optional)" : "Note (optional)"}
+            rows={3}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="resize-none"
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setPending(null); setNote(""); setError(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => pending && submit(pending)}
+              disabled={!!busy}
+              className={cn(
+                pending === "invested"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-red-500 hover:bg-red-600 text-white"
+              )}
+            >
+              {busy ? "Saving…" : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

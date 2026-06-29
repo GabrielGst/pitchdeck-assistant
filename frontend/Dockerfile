@@ -14,7 +14,6 @@ CMD ["npm", "run", "dev"]
 FROM base AS prod
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
 EXPOSE 3000
 ENV NODE_ENV=production
 CMD ["npm", "start"]

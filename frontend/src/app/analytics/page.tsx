@@ -1,6 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface StageCount { stage: string; count: number; }
 interface DwellTime { stage: string; avg_days: number; }
@@ -32,16 +42,20 @@ function ScoreBar({ score, max = 5 }: { score: number; max?: number }) {
   const pct = (score / max) * 100;
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-2 bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className="h-1.5 bg-primary rounded-full" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-gray-500 w-6 text-right">{score.toFixed(1)}</span>
+      <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">
+        {score.toFixed(1)}
+      </span>
     </div>
   );
 }
 
 function WeeklyChart({ data }: { data: WeeklyInvested[] }) {
-  if (data.length === 0) return <p className="text-sm text-gray-400 px-5 py-4">No invested deals yet.</p>;
+  if (data.length === 0) {
+    return <p className="text-sm text-muted-foreground px-5 py-4">No invested deals yet.</p>;
+  }
   const max = Math.max(...data.map((d) => d.count), 1);
   return (
     <div className="px-5 py-4">
@@ -49,15 +63,22 @@ function WeeklyChart({ data }: { data: WeeklyInvested[] }) {
         {data.map((w) => {
           const height = Math.max((w.count / max) * 100, 4);
           return (
-            <div key={w.week_start} className="flex-1 flex flex-col items-center gap-1" title={`${w.week_start}: ${w.count}`}>
-              <div className="w-full bg-green-400 rounded-t" style={{ height: `${height}%` }} />
+            <div
+              key={w.week_start}
+              className="flex-1 flex flex-col items-center gap-1"
+              title={`${w.week_start}: ${w.count}`}
+            >
+              <div
+                className="w-full bg-primary/70 rounded-t-sm"
+                style={{ height: `${height}%` }}
+              />
             </div>
           );
         })}
       </div>
       <div className="flex justify-between mt-1">
-        <span className="text-xs text-gray-400">{data[0]?.week_start}</span>
-        <span className="text-xs text-gray-400">{data[data.length - 1]?.week_start}</span>
+        <span className="text-xs text-muted-foreground">{data[0]?.week_start}</span>
+        <span className="text-xs text-muted-foreground">{data[data.length - 1]?.week_start}</span>
       </div>
     </div>
   );
@@ -75,105 +96,134 @@ export default async function AnalyticsPage() {
     redirect("/dashboard");
   }
 
+  const stats = [
+    { label: "Total Deals", value: data?.total_deals ?? 0 },
+    { label: "Invested", value: data?.invested ?? 0 },
+    { label: "Passed", value: data?.passed ?? 0 },
+    {
+      label: "Pass Rate",
+      value: data?.pass_rate != null ? `${(data.pass_rate * 100).toFixed(0)}%` : "—",
+    },
+  ];
+
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-5xl mx-auto space-y-8">
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-sm text-gray-400 mt-1">Deal outcomes and scoring benchmarks</p>
+          <p className="text-sm text-muted-foreground mt-1">Deal outcomes and scoring benchmarks</p>
         </div>
 
-        {/* Headline numbers */}
+        <Separator />
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Total Deals", value: data?.total_deals ?? 0 },
-            { label: "Invested", value: data?.invested ?? 0 },
-            { label: "Passed", value: data?.passed ?? 0 },
-            {
-              label: "Pass Rate",
-              value: data?.pass_rate != null ? `${(data.pass_rate * 100).toFixed(0)}%` : "—",
-            },
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-lg border border-gray-200 bg-white p-5">
-              <p className="text-xs text-gray-400 uppercase tracking-wide">{label}</p>
-              <p className="text-3xl font-bold mt-1">{value}</p>
-            </div>
+          {stats.map(({ label, value }) => (
+            <Card key={label}>
+              <CardContent className="pt-5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+                <p className="text-3xl font-bold mt-1">{value}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {/* Pipeline funnel */}
           {data && data.by_stage.length > 0 && (
-            <section>
-              <h2 className="text-base font-semibold mb-3">Pipeline Funnel</h2>
-              <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-                {data.by_stage.map((s) => (
-                  <div key={s.stage} className="flex items-center justify-between px-5 py-3">
-                    <span className="text-sm">{STAGE_LABELS[s.stage] ?? s.stage}</span>
-                    <span className="text-sm font-medium">{s.count}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Pipeline Funnel</CardTitle>
+              </CardHeader>
+              <Table>
+                <TableBody>
+                  {data.by_stage.map((s) => (
+                    <TableRow key={s.stage}>
+                      <TableCell className="text-sm">
+                        {STAGE_LABELS[s.stage] ?? s.stage}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm font-medium">
+                        {s.count}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           )}
 
-          {/* Avg dwell time per stage */}
           {data && data.dwell_time.length > 0 && (
-            <section>
-              <h2 className="text-base font-semibold mb-3">Avg Dwell Time per Stage</h2>
-              <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-                {data.dwell_time.map((d) => (
-                  <div key={d.stage} className="flex items-center justify-between px-5 py-3">
-                    <span className="text-sm">{STAGE_LABELS[d.stage] ?? d.stage}</span>
-                    <span className="text-sm font-medium">
-                      {d.avg_days < 1
-                        ? `${Math.round(d.avg_days * 24)}h`
-                        : `${d.avg_days.toFixed(1)}d`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Avg Dwell Time per Stage</CardTitle>
+              </CardHeader>
+              <Table>
+                <TableBody>
+                  {data.dwell_time.map((d) => (
+                    <TableRow key={d.stage}>
+                      <TableCell className="text-sm">
+                        {STAGE_LABELS[d.stage] ?? d.stage}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm font-medium">
+                        {d.avg_days < 1
+                          ? `${Math.round(d.avg_days * 24)}h`
+                          : `${d.avg_days.toFixed(1)}d`}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           )}
         </div>
 
-        {/* Weekly invested chart */}
         {data && (
-          <section>
-            <h2 className="text-base font-semibold mb-3">Invested Deals — Last 12 Weeks</h2>
-            <div className="rounded-lg border border-gray-200 bg-white">
-              <WeeklyChart data={data.weekly_invested} />
-            </div>
-          </section>
+          <Card>
+            <CardHeader className="pb-0">
+              <CardTitle className="text-sm font-semibold">
+                Invested Deals — Last 12 Weeks
+              </CardTitle>
+            </CardHeader>
+            <WeeklyChart data={data.weekly_invested} />
+          </Card>
         )}
 
-        {/* Scorecard averages */}
         {data && data.scorecard_averages.length > 0 && (
-          <section>
-            <h2 className="text-base font-semibold mb-3">Average Scorecard by Dimension</h2>
-            <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-              {data.scorecard_averages.map((d) => (
-                <div key={d.dimension_key} className="px-5 py-3">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>{DIM_LABELS[d.dimension_key] ?? d.dimension_key}</span>
-                    <span className="text-xs text-gray-400">{d.deal_count} deals</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className="w-16">AI score</span>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">
+                Average Scorecard by Dimension
+              </CardTitle>
+            </CardHeader>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dimension</TableHead>
+                  <TableHead>AI Score</TableHead>
+                  <TableHead>Human Score</TableHead>
+                  <TableHead className="text-right">Deals</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.scorecard_averages.map((d) => (
+                  <TableRow key={d.dimension_key}>
+                    <TableCell className="text-sm font-medium">
+                      {DIM_LABELS[d.dimension_key] ?? d.dimension_key}
+                    </TableCell>
+                    <TableCell className="min-w-32">
                       <ScoreBar score={d.avg_ai_score} />
-                    </div>
-                    {d.avg_human_score != null && (
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span className="w-16">Human</span>
-                        <ScoreBar score={d.avg_human_score} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                    </TableCell>
+                    <TableCell className="min-w-32">
+                      {d.avg_human_score != null
+                        ? <ScoreBar score={d.avg_human_score} />
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                      {d.deal_count}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
         )}
       </div>
     </main>

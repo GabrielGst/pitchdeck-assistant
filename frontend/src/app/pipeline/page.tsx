@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { UploadButton } from "@/components/UploadButton";
 import { apiFetch } from "@/lib/api";
+import { Separator } from "@/components/ui/separator";
 
 interface Column {
   stage: string;
@@ -52,12 +53,13 @@ export default async function PipelinePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Deal Pipeline</h1>
-            <p className="text-gray-500 text-sm">
-              {columns.reduce((n, c) => n + c.deals.length, 0)} deals
+            <p className="text-muted-foreground text-sm mt-0.5">
+              {totalDeals} {totalDeals === 1 ? "deal" : "deals"}
             </p>
           </div>
           <UploadButton />
         </div>
+        <Separator />
         <KanbanBoard
           columns={columns}
           stageOrder={config.stage_order}
