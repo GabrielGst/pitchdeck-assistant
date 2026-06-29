@@ -13,9 +13,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import update
+
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.base import Deal, DealStage, PARTNER_ONLY_STAGES, Role, User
+from app.models.corpus import CorpusAChunk
 from app.models.pipeline import PipelineTransition
 
 router = APIRouter(prefix="/deals", tags=["pipeline"])
@@ -80,6 +83,15 @@ async def transition_stage(
         note=body.note,
     )
     db.add(transition)
+
+    # Propagate outcome label to corpus_a embeddings for future retrieval
+    if target in TERMINAL_STAGES:
+        await db.execute(
+            update(CorpusAChunk)
+            .where(CorpusAChunk.deal_id == deal.id)
+            .values(outcome=target.value)
+        )
+
     await db.commit()
     await db.refresh(transition)
 

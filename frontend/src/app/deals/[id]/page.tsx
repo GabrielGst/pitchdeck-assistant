@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AnalysisStream } from "@/components/AnalysisStream";
+import { OutcomeActions } from "@/components/OutcomeActions";
 import { apiFetch } from "@/lib/api";
 
 interface DealDetail {
@@ -26,16 +27,21 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
     <main className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <a href="/pipeline" className="text-sm text-gray-400 hover:text-gray-600">
-            ← Pipeline
-          </a>
-          <div>
-            <h1 className="text-2xl font-bold">{deal?.company_name}</h1>
-            <span className="text-xs text-gray-400 uppercase tracking-wide">
-              {deal?.stage.replace("_", " ")}
-            </span>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <a href="/pipeline" className="text-sm text-gray-400 hover:text-gray-600">
+              ← Pipeline
+            </a>
+            <div>
+              <h1 className="text-2xl font-bold">{deal?.company_name}</h1>
+              <span className="text-xs text-gray-400 uppercase tracking-wide">
+                {deal?.stage.replace("_", " ")}
+              </span>
+            </div>
           </div>
+          {deal && (
+            <OutcomeActions dealId={deal.id} currentStage={deal.stage} token={token!} />
+          )}
         </div>
 
         {/* Analysis — streams live from SSE */}

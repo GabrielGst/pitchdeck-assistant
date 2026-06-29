@@ -5,6 +5,7 @@ from app.api.health import router as health_router
 from app.api.routes.deals import router as deals_router
 from app.api.routes.decks import router as decks_router
 from app.api.routes.analysis import router as analysis_router
+from app.api.routes.analytics import router as analytics_router
 from app.api.routes.annotations import router as annotations_router
 from app.api.routes.scorecard_config import router as scorecard_config_router
 from app.api.routes.pipeline import router as pipeline_router
@@ -32,6 +33,7 @@ app.include_router(users_router)
 app.include_router(decks_router)
 app.include_router(deals_router)
 app.include_router(analysis_router)
+app.include_router(analytics_router)
 app.include_router(annotations_router)
 app.include_router(scorecard_config_router)
 app.include_router(thesis_router)
