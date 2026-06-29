@@ -21,7 +21,7 @@ const STAGE_COLORS: Record<string, string> = {
   passed: "bg-red-50 text-red-700",
 };
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 interface Props {
   dealId: string;

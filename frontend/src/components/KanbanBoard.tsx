@@ -25,7 +25,7 @@ interface Props {
   stageLabels?: Record<string, string>;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 const DEFAULT_STAGE_LABELS: Record<string, string> = {
   inbox: "Inbox", screening: "Screening", due_diligence: "Due Diligence",

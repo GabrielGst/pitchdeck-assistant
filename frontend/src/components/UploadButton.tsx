@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 const ACCEPTED = ".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation";
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 export function UploadButton() {
   const inputRef = useRef<HTMLInputElement>(null);

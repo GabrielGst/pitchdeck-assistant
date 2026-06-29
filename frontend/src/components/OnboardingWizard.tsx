@@ -8,7 +8,7 @@ import { AnalysisStream } from "@/components/AnalysisStream";
 type WizardStep = "upload" | "analyse" | "complete";
 
 const ACCEPTED = ".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation";
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 const STEPS: { id: WizardStep; label: string }[] = [
   { id: "upload", label: "Upload" },
@@ -63,7 +63,6 @@ export function OnboardingWizard() {
   const [step, setStep] = useState<WizardStep>("upload");
   const [dealId, setDealId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>("");
-  const [token, setToken] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -91,15 +90,9 @@ export function OnboardingWizard() {
       }
       const deck = await res.json();
 
-      // Fetch a fresh token right before opening the SSE stream
-      const streamToken = await getToken();
-      if (!streamToken) throw new Error("Not authenticated");
-
-      // Extract company name from filename as fallback
       const name = file.name.replace(/\.(pdf|pptx)$/i, "");
       setCompanyName(name);
       setDealId(deck.deal_id);
-      setToken(streamToken);
       setStep("analyse");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -187,11 +180,12 @@ export function OnboardingWizard() {
                 writing an investment memo. This takes about 60–90 seconds.
               </p>
             </div>
-            <AnalysisStream
-              dealId={dealId}
-              token={token}
-              onComplete={() => setStep("complete")}
-            />
+            {dealId && (
+              <AnalysisStream
+                dealId={dealId}
+                onComplete={() => setStep("complete")}
+              />
+            )}
           </div>
         )}
 

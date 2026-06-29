@@ -8,7 +8,7 @@ interface EditableMemoProps {
   initialText: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 export function EditableMemo({ dealId, initialText }: EditableMemoProps) {
   const [text, setText] = useState(initialText);

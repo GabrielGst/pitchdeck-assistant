@@ -27,8 +27,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://pitchdeck:pitchdeck@postgres:5432/pitchdeck
       DATABASE_URL_SYNC: postgresql://pitchdeck:pitchdeck@postgres:5432/pitchdeck

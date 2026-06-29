@@ -52,7 +52,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Analysis */}
-        <AnalysisStream dealId={id} token={token} />
+        <AnalysisStream dealId={id} />
       </div>
     </main>
   );

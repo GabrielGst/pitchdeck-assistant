@@ -1,4 +1,5 @@
-const API_URL = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Server-side only — uses internal Docker / K8s network. Never import in client components.
+const API_URL = process.env.API_URL ?? "http://backend:8000";
 
 export async function apiFetch<T>(
   path: string,

@@ -27,7 +27,7 @@ export function PipelineConfigEditor({ initialConfig, token }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+  const apiUrl = "/api";
 
   function addCustomStage() {
     const key = newKey.trim();

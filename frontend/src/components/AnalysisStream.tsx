@@ -62,7 +62,6 @@ interface EngagementEvent {
 
 function useEngagementTracker(dealId: string, analysisComplete: boolean) {
   const queueRef = useRef<EngagementEvent[]>([]);
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
   const { getToken } = useAuth();
 
   function enqueue(ev: Omit<EngagementEvent, "timestamp">) {
@@ -76,7 +75,7 @@ function useEngagementTracker(dealId: string, analysisComplete: boolean) {
     try {
       const token = await getToken();
       if (!token) return;
-      await fetch(`${apiUrl}/events/engagement`, {
+      await fetch("/api/events/engagement", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ deal_id: dealId, events }),
@@ -87,13 +86,11 @@ function useEngagementTracker(dealId: string, analysisComplete: boolean) {
     }
   }
 
-  // 30-second heartbeat flush
   useEffect(() => {
     const id = setInterval(flush, 30_000);
     return () => clearInterval(id);
   }, [analysisComplete]);
 
-  // Flush on page unload
   useEffect(() => {
     const handler = () => { flush(); };
     window.addEventListener("visibilitychange", handler);
@@ -143,9 +140,7 @@ function useSectionDwell(
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-
-export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; token: string; onComplete?: () => void }) {
+export function AnalysisStream({ dealId, onComplete }: { dealId: string; onComplete?: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [scorecard, setScorecard] = useState<ScoreDim[]>([]);
   const [ddQuestions, setDdQuestions] = useState<DDItem[]>([]);
@@ -158,6 +153,7 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
   const memoSectionRef = useRef<HTMLElement>(null);
 
   const complete = stage === "complete";
+  const { getToken } = useAuth();
   const { enqueue, flush } = useEngagementTracker(dealId, complete);
 
   useEffect(() => {
@@ -168,29 +164,37 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
     let es: EventSource | null = null;
     let cancelled = false;
 
-    // First check if a completed analysis already exists — avoids re-running LLM
-    fetch(`${API}/analysis/${dealId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
+    async function init() {
+      const token = await getToken();
+      if (cancelled) return;
+
+      // Pre-check: skip stream if analysis already complete
+      try {
+        const res = await fetch(`/api/analysis/${dealId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (cancelled) return;
-        if (data?.status === "complete") {
-          setScorecard(data.scorecard ?? []);
-          setDdQuestions(data.dd_questions ?? []);
-          setMemo(data.memo_text ?? "");
-          setStage("complete");
-          onComplete?.();
-          return;
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "complete") {
+            setScorecard(data.scorecard ?? []);
+            setDdQuestions(data.dd_questions ?? []);
+            setMemo(data.memo_text ?? "");
+            setStage("complete");
+            onComplete?.();
+            return;
+          }
         }
-        es = startStream();
-      })
-      .catch(() => { if (!cancelled) es = startStream(); });
+      } catch {
+        // fall through to stream
+      }
+
+      if (!cancelled) es = startStream();
+    }
 
     function startStream(): EventSource {
-      const source = new EventSource(
-        `${API}/analysis/${dealId}/stream?token=${encodeURIComponent(token)}`
-      );
+      // Token not needed in URL — SSE Route Handler handles auth via Clerk cookie
+      const source = new EventSource(`/api/analysis/${dealId}/stream`);
 
       source.addEventListener("progress", (e) => {
         const data = JSON.parse(e.data);
@@ -239,18 +243,18 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
       return source;
     }
 
+    init();
+
     return () => {
       cancelled = true;
       es?.close();
     };
-  }, [dealId, token]);
+  }, [dealId]);
 
-  // Section dwell tracking (only fires once analysis is complete)
   useSectionDwell(scorecardRef, "scorecard", complete, enqueue);
   useSectionDwell(ddRef, "dd_questions", complete, enqueue);
   useSectionDwell(memoSectionRef, "memo", complete, enqueue);
 
-  // Memo clipboard copy tracking
   useEffect(() => {
     if (!complete) return;
     const handler = () => enqueue({ event_type: "memo_copied", section: "memo", value: null });
@@ -269,7 +273,6 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
 
   return (
     <div className="space-y-8">
-      {/* Progress bar */}
       {stage !== "complete" && stage !== "error" && (
         <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
@@ -281,7 +284,6 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Scorecard */}
       {scorecard.length > 0 && (
         <section ref={scorecardRef}>
           <h2 className="text-lg font-semibold mb-3">Scorecard</h2>
@@ -306,7 +308,6 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
         </section>
       )}
 
-      {/* DD Questions */}
       {ddQuestions.length > 0 && (
         <section ref={ddRef}>
           <h2 className="text-lg font-semibold mb-3">Due Diligence Questions</h2>
@@ -327,7 +328,6 @@ export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; 
         </section>
       )}
 
-      {/* Streaming Memo */}
       {memo && (
         <section ref={memoSectionRef}>
           <h2 className="text-lg font-semibold mb-3">Investment Memo</h2>

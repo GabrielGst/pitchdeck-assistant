@@ -9,7 +9,7 @@ interface Props {
 }
 
 const TERMINAL = new Set(["invested", "passed"]);
-const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API = "/api";
 
 export function OutcomeActions({ dealId, currentStage }: Props) {
   const [stage, setStage] = useState(currentStage);
