@@ -50,6 +50,95 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
+// ── Engagement tracking ────────────────────────────────────────────────────
+
+interface EngagementEvent {
+  event_type: string;
+  section: string | null;
+  value: number | null;
+  timestamp: string;
+}
+
+function useEngagementTracker(dealId: string, token: string, analysisComplete: boolean) {
+  const queueRef = useRef<EngagementEvent[]>([]);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+  function enqueue(ev: Omit<EngagementEvent, "timestamp">) {
+    if (!analysisComplete) return;
+    queueRef.current.push({ ...ev, timestamp: new Date().toISOString() });
+  }
+
+  async function flush() {
+    if (queueRef.current.length === 0) return;
+    const events = queueRef.current.splice(0);
+    try {
+      await fetch(`${apiUrl}/events/engagement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ deal_id: dealId, events }),
+        keepalive: true,
+      });
+    } catch {
+      // best-effort: drop on failure, not user-facing
+    }
+  }
+
+  // 30-second heartbeat flush
+  useEffect(() => {
+    const id = setInterval(flush, 30_000);
+    return () => clearInterval(id);
+  }, [analysisComplete]);
+
+  // Flush on page unload
+  useEffect(() => {
+    const handler = () => { flush(); };
+    window.addEventListener("visibilitychange", handler);
+    window.addEventListener("pagehide", handler);
+    return () => {
+      window.removeEventListener("visibilitychange", handler);
+      window.removeEventListener("pagehide", handler);
+    };
+  }, [analysisComplete]);
+
+  return { enqueue, flush };
+}
+
+function useSectionDwell(
+  ref: React.RefObject<HTMLElement | null>,
+  section: string,
+  active: boolean,
+  enqueue: (ev: Omit<EngagementEvent, "timestamp">) => void,
+) {
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    const el = ref.current;
+    let enteredAt: number | null = null;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          enteredAt = Date.now();
+        } else if (enteredAt !== null) {
+          const dwell = (Date.now() - enteredAt) / 1000;
+          enqueue({ event_type: "section_dwell", section, value: dwell });
+          enteredAt = null;
+        }
+      },
+      { threshold: 0.25 },
+    );
+    observer.observe(el);
+    return () => {
+      if (enteredAt !== null) {
+        const dwell = (Date.now() - enteredAt) / 1000;
+        enqueue({ event_type: "section_dwell", section, value: dwell });
+      }
+      observer.disconnect();
+    };
+  }, [active, section]);
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
+
 export function AnalysisStream({ dealId, token }: { dealId: string; token: string }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [scorecard, setScorecard] = useState<ScoreDim[]>([]);
@@ -57,6 +146,12 @@ export function AnalysisStream({ dealId, token }: { dealId: string; token: strin
   const [memo, setMemo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const memoRef = useRef<HTMLDivElement>(null);
+  const scorecardRef = useRef<HTMLElement>(null);
+  const ddRef = useRef<HTMLElement>(null);
+  const memoSectionRef = useRef<HTMLElement>(null);
+
+  const complete = stage === "complete";
+  const { enqueue, flush } = useEngagementTracker(dealId, token, complete);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -110,6 +205,19 @@ export function AnalysisStream({ dealId, token }: { dealId: string; token: strin
     return () => es.close();
   }, [dealId, token]);
 
+  // Section dwell tracking (only fires once analysis is complete)
+  useSectionDwell(scorecardRef, "scorecard", complete, enqueue);
+  useSectionDwell(ddRef, "dd_questions", complete, enqueue);
+  useSectionDwell(memoSectionRef, "memo", complete, enqueue);
+
+  // Memo clipboard copy tracking
+  useEffect(() => {
+    if (!complete) return;
+    const handler = () => enqueue({ event_type: "memo_copied", section: "memo", value: null });
+    document.addEventListener("copy", handler);
+    return () => document.removeEventListener("copy", handler);
+  }, [complete]);
+
   const progressLabel: Record<Stage, string> = {
     idle: "Starting analysis…",
     scorecard: "Scoring the deck…",
@@ -135,7 +243,7 @@ export function AnalysisStream({ dealId, token }: { dealId: string; token: strin
 
       {/* Scorecard */}
       {scorecard.length > 0 && (
-        <section>
+        <section ref={scorecardRef}>
           <h2 className="text-lg font-semibold mb-3">Scorecard</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {scorecard.map((dim) => (
@@ -160,13 +268,14 @@ export function AnalysisStream({ dealId, token }: { dealId: string; token: strin
 
       {/* DD Questions */}
       {ddQuestions.length > 0 && (
-        <section>
+        <section ref={ddRef}>
           <h2 className="text-lg font-semibold mb-3">Due Diligence Questions</h2>
           <ul className="space-y-2">
             {ddQuestions.map((item, i) => (
               <li
                 key={i}
-                className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${RISK_COLORS[item.risk_level]}`}
+                onClick={() => enqueue({ event_type: "dd_question_clicked", section: "dd_questions", value: item.position })}
+                className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm cursor-default ${RISK_COLORS[item.risk_level]}`}
               >
                 <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium uppercase">
                   {item.risk_level}
@@ -180,7 +289,7 @@ export function AnalysisStream({ dealId, token }: { dealId: string; token: strin
 
       {/* Streaming Memo */}
       {memo && (
-        <section>
+        <section ref={memoSectionRef}>
           <h2 className="text-lg font-semibold mb-3">Investment Memo</h2>
           <div className="prose prose-sm max-w-none rounded-lg border border-gray-200 bg-white p-6">
             <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800">{memo}</pre>
