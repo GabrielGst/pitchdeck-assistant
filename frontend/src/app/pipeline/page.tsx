@@ -10,9 +10,16 @@ interface Column {
     id: string;
     company_name: string;
     stage: string;
+    custom_stage: string | null;
     deck_id: string;
     created_at: string;
   }[];
+}
+
+interface PipelineConfig {
+  stage_order: string[];
+  stage_labels: Record<string, string>;
+  custom_stages: { key: string; label: string }[];
 }
 
 export default async function PipelinePage() {
@@ -21,11 +28,19 @@ export default async function PipelinePage() {
   if (!token) redirect("/sign-in");
 
   let columns: Column[] = [];
-  try {
-    columns = await apiFetch<Column[]>("/deals/kanban", token);
-  } catch {
-    // Board renders empty on error; inline message shown below
-  }
+  let config: PipelineConfig = {
+    stage_order: ["inbox", "screening", "due_diligence", "partner_review", "invested", "passed"],
+    stage_labels: {
+      inbox: "Inbox", screening: "Screening", due_diligence: "Due Diligence",
+      partner_review: "Partner Review", invested: "Invested", passed: "Passed",
+    },
+    custom_stages: [],
+  };
+
+  await Promise.all([
+    apiFetch<Column[]>("/deals/kanban", token).then((d) => { columns = d; }).catch(() => {}),
+    apiFetch<PipelineConfig>("/pipeline-config", token).then((d) => { config = d; }).catch(() => {}),
+  ]);
 
   return (
     <main className="min-h-screen p-8">
@@ -39,7 +54,11 @@ export default async function PipelinePage() {
           </div>
           <UploadButton />
         </div>
-        <KanbanBoard columns={columns} />
+        <KanbanBoard
+          columns={columns}
+          stageOrder={config.stage_order}
+          stageLabels={config.stage_labels}
+        />
       </div>
     </main>
   );

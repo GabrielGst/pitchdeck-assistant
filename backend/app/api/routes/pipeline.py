@@ -19,7 +19,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.base import Deal, DealStage, PARTNER_ONLY_STAGES, Role, User
 from app.models.corpus import CorpusAChunk
-from app.models.pipeline import PipelineTransition
+from app.models.pipeline import PipelineTransition, TenantConfig
 
 router = APIRouter(prefix="/deals", tags=["pipeline"])
 
@@ -46,23 +46,10 @@ async def transition_stage(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TransitionOut:
-    # Validate target stage
-    try:
-        target = DealStage(body.stage)
-    except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid stage: {body.stage}")
-
-    # Load deal and enforce tenant isolation
+    # Load deal and enforce tenant isolation early
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Deal not found")
-
-    # Terminal stage gate — Partner and Admin only
-    if target in PARTNER_ONLY_STAGES and user.role not in (Role.partner, Role.admin):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Only Partners and Admins can move deals to '{target.value}'",
-        )
 
     # Deals in terminal states cannot be moved
     if deal.stage in TERMINAL_STAGES:
@@ -71,8 +58,35 @@ async def transition_stage(
             detail=f"Deal is in terminal state '{deal.stage.value}' and cannot be moved",
         )
 
+    # Resolve target — check universal enum first, then tenant custom stages
+    target: DealStage | None = None
+    custom_stage_key: str | None = None
+
+    try:
+        target = DealStage(body.stage)
+    except ValueError:
+        # Check if it's a custom stage key for this tenant
+        cfg_result = await db.execute(
+            select(TenantConfig).where(TenantConfig.tenant_id == user.tenant_id)
+        )
+        cfg = cfg_result.scalar_one_or_none()
+        custom_keys = {s["key"] for s in (cfg.custom_stages if cfg else []) or []}
+        if body.stage in custom_keys:
+            target = DealStage.partner_review
+            custom_stage_key = body.stage
+        else:
+            raise HTTPException(status_code=422, detail=f"Invalid stage: {body.stage}")
+
+    # Terminal stage gate — Partner and Admin only
+    if target in PARTNER_ONLY_STAGES and user.role not in (Role.partner, Role.admin):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only Partners and Admins can move deals to '{target.value}'",
+        )
+
     from_stage = deal.stage
     deal.stage = target
+    deal.custom_stage = custom_stage_key  # None clears any prior custom stage
 
     transition = PipelineTransition(
         deal_id=deal.id,
@@ -95,10 +109,11 @@ async def transition_stage(
     await db.commit()
     await db.refresh(transition)
 
+    effective_stage = custom_stage_key or transition.to_stage.value
     return TransitionOut(
         deal_id=deal.id,
         from_stage=from_stage.value if from_stage else None,
-        to_stage=transition.to_stage.value,
+        to_stage=effective_stage,
         actor_id=user.id,
         created_at=transition.created_at,
     )

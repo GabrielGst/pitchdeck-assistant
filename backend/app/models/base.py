@@ -98,6 +98,7 @@ class Deal(Base):
     stage: Mapped[DealStage] = mapped_column(
         Enum(DealStage), nullable=False, default=DealStage.inbox
     )
+    custom_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

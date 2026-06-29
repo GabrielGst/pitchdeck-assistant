@@ -2,21 +2,11 @@
 
 import { useRouter } from "next/navigation";
 
-const STAGE_LABELS: Record<string, string> = {
-  inbox: "Inbox",
-  screening: "Screening",
-  due_diligence: "Due Diligence",
-  partner_review: "Partner Review",
-  invested: "Invested",
-  passed: "Passed",
-};
-
-const STAGE_ORDER = ["inbox", "screening", "due_diligence", "partner_review", "invested", "passed"];
-
 interface Deal {
   id: string;
   company_name: string;
   stage: string;
+  custom_stage: string | null;
   deck_id: string;
   created_at: string;
 }
@@ -26,11 +16,32 @@ interface Column {
   deals: Deal[];
 }
 
-export function KanbanBoard({ columns }: { columns: Column[] }) {
+interface Props {
+  columns: Column[];
+  stageOrder?: string[];
+  stageLabels?: Record<string, string>;
+}
+
+const DEFAULT_STAGE_LABELS: Record<string, string> = {
+  inbox: "Inbox", screening: "Screening", due_diligence: "Due Diligence",
+  partner_review: "Partner Review", invested: "Invested", passed: "Passed",
+};
+
+const DEFAULT_STAGE_ORDER = [
+  "inbox", "screening", "due_diligence", "partner_review", "invested", "passed",
+];
+
+export function KanbanBoard({ columns, stageOrder, stageLabels }: Props) {
   const router = useRouter();
+  const order = stageOrder ?? DEFAULT_STAGE_ORDER;
+  const labels = stageLabels ?? DEFAULT_STAGE_LABELS;
 
   const sorted = [...columns].sort(
-    (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage)
+    (a, b) => {
+      const ai = order.indexOf(a.stage);
+      const bi = order.indexOf(b.stage);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    }
   );
 
   return (
@@ -39,7 +50,7 @@ export function KanbanBoard({ columns }: { columns: Column[] }) {
         <div key={col.stage} className="w-64 shrink-0">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">
-              {STAGE_LABELS[col.stage] ?? col.stage}
+              {labels[col.stage] ?? col.stage}
             </h3>
             <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
               {col.deals.length}

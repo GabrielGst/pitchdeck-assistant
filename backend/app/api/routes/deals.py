@@ -18,6 +18,7 @@ class DealOut(BaseModel):
     id: uuid.UUID
     company_name: str
     stage: str
+    custom_stage: str | None = None
     deck_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -52,6 +53,7 @@ async def list_deals(
             id=d.id,
             company_name=d.company_name,
             stage=d.stage.value,
+            custom_stage=d.custom_stage,
             deck_id=d.deck_id,
             created_at=d.created_at,
             updated_at=d.updated_at,
@@ -65,7 +67,11 @@ async def kanban_board(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[DealsGrouped]:
-    """Return all deals grouped by pipeline stage for the Kanban view."""
+    """Return all deals grouped by pipeline stage for the Kanban view.
+
+    Deals in a custom stage appear under their custom_stage key, not under
+    their canonical stage (partner_review).
+    """
     result = await db.execute(
         select(Deal).where(Deal.tenant_id == user.tenant_id).order_by(Deal.created_at.desc())
     )
@@ -73,11 +79,15 @@ async def kanban_board(
 
     grouped: dict[str, list[DealOut]] = {s.value: [] for s in DealStage}
     for d in all_deals:
-        grouped[d.stage.value].append(
+        effective_stage = d.custom_stage or d.stage.value
+        if effective_stage not in grouped:
+            grouped[effective_stage] = []
+        grouped[effective_stage].append(
             DealOut(
                 id=d.id,
                 company_name=d.company_name,
                 stage=d.stage.value,
+                custom_stage=d.custom_stage,
                 deck_id=d.deck_id,
                 created_at=d.created_at,
                 updated_at=d.updated_at,
@@ -100,6 +110,7 @@ async def get_deal(
         id=deal.id,
         company_name=deal.company_name,
         stage=deal.stage.value,
+        custom_stage=deal.custom_stage,
         deck_id=deal.deck_id,
         created_at=deal.created_at,
         updated_at=deal.updated_at,
