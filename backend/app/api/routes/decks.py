@@ -13,8 +13,7 @@ from app.services.document_parser import SUPPORTED_MIME_TYPES
 
 router = APIRouter(prefix="/decks", tags=["decks"])
 
-# Local upload dir for dev (replaced by S3 in prod)
-UPLOAD_DIR = Path("/tmp/pitchdeck-uploads")
+UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB

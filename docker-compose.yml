@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: pitchdeck
       POSTGRES_PASSWORD: pitchdeck
       POSTGRES_DB: pitchdeck
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +15,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -32,7 +28,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://pitchdeck:pitchdeck@postgres:5432/pitchdeck
       DATABASE_URL_SYNC: postgresql://pitchdeck:pitchdeck@postgres:5432/pitchdeck
@@ -47,6 +43,7 @@ services:
     # CLERK_SECRET_KEY is injected from .env via env_file above
     volumes:
       - ./backend:/app
+      - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +68,7 @@ services:
       - .env
     volumes:
       - ./backend:/app
+      - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,7 +81,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       API_URL: http://backend:8000
       NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
@@ -112,16 +110,18 @@ services:
       retries: 5
 
   langfuse-web:
-    image: langfuse/langfuse:3
+    image: langfuse/langfuse:2
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_URL: https://pitchdeck-langfuse.webagab.fr
       NEXTAUTH_SECRET: dev-nextauth-secret-change-in-prod
       SALT: dev-salt-change-in-prod
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      SMTP_CONNECTION_URL: ${LANGFUSE_SMTP_URL}
+      EMAIL_FROM_ADDRESS: ${LANGFUSE_EMAIL_FROM}
     depends_on:
       langfuse-db:
         condition: service_healthy
@@ -130,3 +130,4 @@ volumes:
   postgres_data:
   redis_data:
   langfuse_db_data:
+  uploads:

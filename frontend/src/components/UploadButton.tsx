@@ -2,28 +2,37 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 
 const ACCEPTED = ".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export function UploadButton() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { getToken } = useAuth();
 
   async function handleFile(file: File) {
     setError(null);
     setUploading(true);
     try {
+      const token = await getToken();
       const form = new FormData();
       form.append("file", file);
 
-      const res = await fetch("/api/decks", { method: "POST", body: form });
+      const res = await fetch(`${API}/decks`, {
+        method: "POST",
+        body: form,
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: "Upload failed" }));
         throw new Error(body.detail ?? "Upload failed");
       }
-      router.refresh();
+      const deck = await res.json();
+      router.push(`/deals/${deck.deal_id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {

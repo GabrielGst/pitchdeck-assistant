@@ -12,6 +12,7 @@ interface Column {
     stage: string;
     custom_stage: string | null;
     deck_id: string;
+    deck_status: string;
     created_at: string;
   }[];
 }
@@ -41,6 +42,9 @@ export default async function PipelinePage() {
     apiFetch<Column[]>("/deals/kanban", token).then((d) => { columns = d; }).catch(() => {}),
     apiFetch<PipelineConfig>("/pipeline-config", token).then((d) => { config = d; }).catch(() => {}),
   ]);
+
+  const totalDeals = columns.reduce((n, c) => n + c.deals.length, 0);
+  if (totalDeals === 0) redirect("/onboarding");
 
   return (
     <main className="min-h-screen p-8">

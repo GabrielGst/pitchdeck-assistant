@@ -20,7 +20,7 @@ export function EditableMemo({ dealId, token, initialText }: EditableMemoProps) 
     async (value: string) => {
       setSaving(true);
       setSaved(false);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
       try {
         await fetch(`${apiUrl}/analysis/${dealId}/memo`, {
           method: "PATCH",

@@ -34,7 +34,7 @@ export function OutcomeActions({ dealId, currentStage, token }: Props) {
     if (note.trim()) body.note = note.trim();
 
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/deals/${dealId}/stage`,
+      `${process.env.NEXT_PUBLIC_API_URL ?? "/api"}/deals/${dealId}/stage`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

@@ -146,7 +146,11 @@ async def _stream_analysis(
     memo_text = ""
 
     while True:
-        item = await queue.get()
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=15.0)
+        except asyncio.TimeoutError:
+            yield ": keepalive\n\n"
+            continue
         if item is None:
             break
         event, payload = item
@@ -247,7 +251,15 @@ async def get_analysis(
     )
     ar = result.scalar_one_or_none()
     if ar is None:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+        return AnalysisOut(
+            id=deal_id,
+            deal_id=deal_id,
+            status="pending",
+            llm_model=None,
+            scorecard=[],
+            dd_questions=[],
+            memo_text=None,
+        )
 
     await db.refresh(ar, ["scores", "dd_questions"])
 

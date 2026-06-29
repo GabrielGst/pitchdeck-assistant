@@ -19,17 +19,28 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import litellm
-from langfuse import Langfuse
 
 from app.core.config import settings
 from app.models.analysis import UNIVERSAL_DIMENSIONS, RiskLevel
 
-langfuse = Langfuse(
-    public_key=settings.langfuse_public_key or "dummy",
-    secret_key=settings.langfuse_secret_key or "dummy",
-    host=settings.langfuse_host,
-    enabled=bool(settings.langfuse_public_key),
-)
+
+class _NoopEnd:
+    def end(self, **_: object) -> None: ...
+
+
+class _NoopTrace:
+    def generation(self, **_: object) -> _NoopEnd:
+        return _NoopEnd()
+
+
+class _NoopLangfuse:
+    def trace(self, **_: object) -> _NoopTrace:
+        return _NoopTrace()
+
+    def flush(self) -> None: ...
+
+
+langfuse: _NoopLangfuse = _NoopLangfuse()
 
 # ---------------------------------------------------------------------------
 # Data transfer objects

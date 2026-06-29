@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 interface ScoreDim {
   key: string;
@@ -59,9 +60,10 @@ interface EngagementEvent {
   timestamp: string;
 }
 
-function useEngagementTracker(dealId: string, token: string, analysisComplete: boolean) {
+function useEngagementTracker(dealId: string, analysisComplete: boolean) {
   const queueRef = useRef<EngagementEvent[]>([]);
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+  const { getToken } = useAuth();
 
   function enqueue(ev: Omit<EngagementEvent, "timestamp">) {
     if (!analysisComplete) return;
@@ -72,6 +74,8 @@ function useEngagementTracker(dealId: string, token: string, analysisComplete: b
     if (queueRef.current.length === 0) return;
     const events = queueRef.current.splice(0);
     try {
+      const token = await getToken();
+      if (!token) return;
       await fetch(`${apiUrl}/events/engagement`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -139,70 +143,106 @@ function useSectionDwell(
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function AnalysisStream({ dealId, token }: { dealId: string; token: string }) {
+const API = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+
+export function AnalysisStream({ dealId, token, onComplete }: { dealId: string; token: string; onComplete?: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [scorecard, setScorecard] = useState<ScoreDim[]>([]);
   const [ddQuestions, setDdQuestions] = useState<DDItem[]>([]);
   const [memo, setMemo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const stageRef = useRef<Stage>("idle");
   const memoRef = useRef<HTMLDivElement>(null);
   const scorecardRef = useRef<HTMLElement>(null);
   const ddRef = useRef<HTMLElement>(null);
   const memoSectionRef = useRef<HTMLElement>(null);
 
   const complete = stage === "complete";
-  const { enqueue, flush } = useEngagementTracker(dealId, token, complete);
+  const { enqueue, flush } = useEngagementTracker(dealId, complete);
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-    const es = new EventSource(
-      `${apiUrl}/analysis/${dealId}/stream?token=${encodeURIComponent(token)}`
-    );
+    stageRef.current = stage;
+  }, [stage]);
 
-    es.addEventListener("progress", (e) => {
-      const data = JSON.parse(e.data);
-      setStage(data.stage as Stage);
-    });
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let cancelled = false;
 
-    es.addEventListener("scorecard", (e) => {
-      setScorecard(JSON.parse(e.data));
-    });
+    // First check if a completed analysis already exists — avoids re-running LLM
+    fetch(`${API}/analysis/${dealId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.status === "complete") {
+          setScorecard(data.scorecard ?? []);
+          setDdQuestions(data.dd_questions ?? []);
+          setMemo(data.memo_text ?? "");
+          setStage("complete");
+          onComplete?.();
+          return;
+        }
+        es = startStream();
+      })
+      .catch(() => { if (!cancelled) es = startStream(); });
 
-    es.addEventListener("dd_questions", (e) => {
-      setDdQuestions(JSON.parse(e.data));
-    });
+    function startStream(): EventSource {
+      const source = new EventSource(
+        `${API}/analysis/${dealId}/stream?token=${encodeURIComponent(token)}`
+      );
 
-    es.addEventListener("memo_chunk", (e) => {
-      const { text } = JSON.parse(e.data);
-      setMemo((prev) => prev + text);
-      setTimeout(() => memoRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
-    });
+      source.addEventListener("progress", (e) => {
+        const data = JSON.parse(e.data);
+        setStage(data.stage as Stage);
+      });
 
-    es.addEventListener("done", () => {
-      setStage("complete");
-      es.close();
-    });
+      source.addEventListener("scorecard", (e) => {
+        setScorecard(JSON.parse(e.data));
+      });
 
-    es.addEventListener("error", (e) => {
-      try {
-        const data = JSON.parse((e as MessageEvent).data ?? "{}");
-        setError(data.message ?? "Analysis failed");
-      } catch {
-        setError("Connection lost");
-      }
-      setStage("error");
-      es.close();
-    });
+      source.addEventListener("dd_questions", (e) => {
+        setDdQuestions(JSON.parse(e.data));
+      });
 
-    es.onerror = () => {
-      if (stage !== "complete") {
-        setError("Stream connection lost");
+      source.addEventListener("memo_chunk", (e) => {
+        const { text } = JSON.parse(e.data);
+        setMemo((prev) => prev + text);
+        setTimeout(() => memoRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+      });
+
+      source.addEventListener("done", () => {
+        setStage("complete");
+        source.close();
+        onComplete?.();
+      });
+
+      source.addEventListener("error", (e) => {
+        try {
+          const data = JSON.parse((e as MessageEvent).data ?? "{}");
+          setError(data.message ?? "Analysis failed");
+        } catch {
+          setError("Connection lost");
+        }
         setStage("error");
-      }
-      es.close();
-    };
+        source.close();
+      });
 
-    return () => es.close();
+      source.onerror = () => {
+        if (stageRef.current !== "complete") {
+          setError("Stream connection lost — please retry");
+          setStage("error");
+        }
+        source.close();
+      };
+
+      return source;
+    }
+
+    return () => {
+      cancelled = true;
+      es?.close();
+    };
   }, [dealId, token]);
 
   // Section dwell tracking (only fires once analysis is complete)
