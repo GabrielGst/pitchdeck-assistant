@@ -5,6 +5,8 @@ metadata:
   namespace: pitchdeck-prod
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: pitchdeck-frontend
@@ -46,7 +48,7 @@ spec:
               memory: 768Mi
           readinessProbe:
             httpGet:
-              path: /
+              path: /api/healthz
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 10
