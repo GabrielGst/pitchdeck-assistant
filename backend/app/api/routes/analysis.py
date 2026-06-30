@@ -189,12 +189,12 @@ async def _stream_analysis(
             is_custom=dim.get("is_custom", False),
         ))
 
-    for item in dd_data:
+    for dd_item in dd_data:
         db.add(DDQuestion(
             analysis_id=ar.id,
-            question=item["question"],
-            risk_level=RiskLevel(item.get("risk_level", "medium")),
-            position=item["position"],
+            question=dd_item["question"],
+            risk_level=RiskLevel(dd_item.get("risk_level", "medium")),
+            position=dd_item["position"],
         ))
 
     await db.commit()

@@ -36,7 +36,7 @@ async def verify_clerk_token(token: str) -> str:
     signing_key = None
     for key_data in keys:
         if key_data.get("kid") == kid:
-            signing_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)  # type: ignore[attr-defined, assignment]
+            signing_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)  # type: ignore[attr-defined]
             break
 
     if signing_key is None:

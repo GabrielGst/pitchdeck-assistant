@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from app.worker.celery_app import celery_app
 
@@ -9,7 +10,7 @@ def ping() -> str:
 
 
 @celery_app.task(name="worker.process_deck", bind=True, max_retries=3)
-def process_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+def process_deck(self, deck_id: str, tenant_id: str) -> dict[str, Any]:
     """
     Extract text from an uploaded deck, chunk it, and mark the deck as processed.
     Publishes EXTRACTION_COMPLETE to Redis when done (consumed by the SSE endpoint in #5).
@@ -64,7 +65,7 @@ def process_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[mi
 
 
 @celery_app.task(name="worker.index_deal_into_corpus_a", bind=True, max_retries=3)
-def index_deal_into_corpus_a(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+def index_deal_into_corpus_a(self, deck_id: str, tenant_id: str) -> dict[str, Any]:
     """
     Embed a processed deck's text into corpus_a_chunks so future deals can
     retrieve historical context. Runs after EXTRACTION_COMPLETE is published,
@@ -119,7 +120,7 @@ def index_deal_into_corpus_a(self, deck_id: str, tenant_id: str) -> dict:  # typ
 
 
 @celery_app.task(name="worker.index_thesis_document", bind=True, max_retries=3)
-def index_thesis_document(self, document_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+def index_thesis_document(self, document_id: str, tenant_id: str) -> dict[str, Any]:
     """
     Extract text from a thesis document and embed it into corpus_b_chunks.
     Runs async embedding in a sync Celery context via asyncio.run().
@@ -179,7 +180,7 @@ def index_thesis_document(self, document_id: str, tenant_id: str) -> dict:  # ty
 
 
 @celery_app.task(name="worker.triage_deck", bind=True, max_retries=2)
-def triage_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+def triage_deck(self, deck_id: str, tenant_id: str) -> dict[str, Any]:
     """
     Run a lightweight LLM triage call on the extracted deck text and store
     the result in deal.triage. Fires in parallel with corpus indexing so it
