@@ -51,8 +51,9 @@ def process_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[mi
             session.commit()
             raise self.retry(exc=exc, countdown=30)
 
-    # Auto-index into corpus A (deal history) in the background
+    # Auto-index into corpus A and run triage in parallel
     index_deal_into_corpus_a.delay(deck_id, tenant_id)
+    triage_deck.delay(deck_id, tenant_id)
 
     # Publish extraction complete event so the SSE endpoint can begin streaming
     r = redis.Redis.from_url(settings.redis_url)
@@ -175,6 +176,47 @@ def index_thesis_document(self, document_id: str, tenant_id: str) -> dict:  # ty
 
     asyncio.run(_embed_async())
     return {"document_id": document_id, "status": "indexed"}
+
+
+@celery_app.task(name="worker.triage_deck", bind=True, max_retries=2)
+def triage_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[misc]
+    """
+    Run a lightweight LLM triage call on the extracted deck text and store
+    the result in deal.triage. Fires in parallel with corpus indexing so it
+    does not delay the SSE analysis stream.
+    """
+    from sqlalchemy import create_engine, select as sa_select
+    from sqlalchemy.orm import Session
+
+    from app.core.config import settings
+    from app.models.base import Deal, Deck
+    from app.services import analysis_service
+
+    engine = create_engine(settings.database_url_sync, echo=False)
+
+    with Session(engine) as session:
+        deck = session.get(Deck, uuid.UUID(deck_id))
+        if deck is None or not deck.extracted_text:
+            return {"error": "deck not found or has no text"}
+
+        deal = session.execute(
+            sa_select(Deal).where(Deal.deck_id == uuid.UUID(deck_id))
+        ).scalar_one_or_none()
+        if deal is None:
+            return {"error": "deal not found"}
+
+        try:
+            snapshot = analysis_service.triage(
+                deck_text=deck.extracted_text,
+                deal_id=str(deal.id),
+                tenant_id=tenant_id,
+            )
+            deal.triage = snapshot
+            session.commit()
+        except Exception as exc:
+            raise self.retry(exc=exc, countdown=30)
+
+    return {"deck_id": deck_id, "status": "triaged"}
 
 
 def _load_file(storage_path: str) -> bytes:

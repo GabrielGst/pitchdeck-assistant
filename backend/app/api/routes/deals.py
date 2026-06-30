@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -166,3 +167,39 @@ async def delete_deal(
 
     await db.commit()
     return Response(status_code=204)
+
+
+class TriageOut(BaseModel):
+    company: str
+    sector: str
+    funding_stage: str
+    key_metrics: list[str]
+    thesis_fit: str
+    thesis_fit_reason: str
+    summary: str
+
+
+@router.get("/{deal_id}/triage", response_model=TriageOut)
+async def get_triage(
+    deal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TriageOut:
+    result = await db.execute(
+        select(Deal).where(Deal.id == deal_id).options(selectinload(Deal.deck))
+    )
+    deal = result.scalar_one_or_none()
+    if deal is None or deal.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if deal.triage is None:
+        raise HTTPException(status_code=404, detail="Triage not ready yet")
+    t: dict[str, Any] = deal.triage
+    return TriageOut(
+        company=t.get("company", ""),
+        sector=t.get("sector", ""),
+        funding_stage=t.get("funding_stage", ""),
+        key_metrics=t.get("key_metrics", []),
+        thesis_fit=t.get("thesis_fit", "unknown"),
+        thesis_fit_reason=t.get("thesis_fit_reason", ""),
+        summary=t.get("summary", ""),
+    )

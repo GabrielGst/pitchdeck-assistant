@@ -300,3 +300,75 @@ def _parse_dd_questions(text: str) -> list[dict[str, Any]]:
         ]
     except Exception:
         return []
+
+
+# ---------------------------------------------------------------------------
+# Triage — lightweight inbox snapshot
+# ---------------------------------------------------------------------------
+
+_TRIAGE_SYSTEM = """You are a senior venture capital analyst. Extract key facts from pitch decks.
+Return ONLY valid JSON — no markdown, no explanation."""
+
+_TRIAGE_USER = """\
+Extract a triage snapshot from this pitch deck for quick inbox screening.
+
+Return ONLY a JSON object with this exact structure:
+{{
+  "company": "<company name>",
+  "sector": "<sector / vertical, e.g. B2B SaaS, FinTech, HealthTech>",
+  "funding_stage": "<stage, e.g. Pre-seed, Seed, Series A>",
+  "key_metrics": ["<metric 1, e.g. €120K ARR>", "<metric 2>", "<metric 3>"],
+  "thesis_fit": "<strong|moderate|weak|unknown>",
+  "thesis_fit_reason": "<one sentence explaining the fit verdict>",
+  "summary": "<2–3 sentence plain-English summary of what the company does and why it might be interesting>"
+}}
+
+Thesis context (if provided):
+{thesis_context}
+
+Pitch deck content:
+{deck_text}
+"""
+
+
+def triage(deck_text: str, deal_id: str, tenant_id: str, thesis_context: str = "") -> dict[str, Any]:
+    """
+    Fast, non-streaming triage call. Returns a structured snapshot for Inbox view.
+    Falls back to a minimal dict on any error so the pipeline never blocks.
+    """
+    prompt = _TRIAGE_USER.format(
+        deck_text=deck_text[:40_000],
+        thesis_context=thesis_context or "No thesis context configured.",
+    )
+    try:
+        resp = litellm.completion(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": _TRIAGE_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=600,
+        )
+        text = resp.choices[0].message.content or ""
+        data: dict[str, Any] = json.loads(_strip_fences(text))
+        valid_fits = {"strong", "moderate", "weak", "unknown"}
+        return {
+            "company": str(data.get("company", "")),
+            "sector": str(data.get("sector", "")),
+            "funding_stage": str(data.get("funding_stage", "")),
+            "key_metrics": [str(m) for m in data.get("key_metrics", [])[:5]],
+            "thesis_fit": data.get("thesis_fit", "unknown") if data.get("thesis_fit") in valid_fits else "unknown",
+            "thesis_fit_reason": str(data.get("thesis_fit_reason", "")),
+            "summary": str(data.get("summary", "")),
+        }
+    except Exception:
+        return {
+            "company": "",
+            "sector": "",
+            "funding_stage": "",
+            "key_metrics": [],
+            "thesis_fit": "unknown",
+            "thesis_fit_reason": "Could not extract triage data.",
+            "summary": "",
+        }
