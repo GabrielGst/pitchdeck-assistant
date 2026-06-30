@@ -114,34 +114,6 @@ async def get_deal(
     return _deal_out(deal)
 
 
-@router.patch("/{deal_id}/stage", response_model=DealOut)
-async def update_stage(
-    deal_id: uuid.UUID,
-    body: StageUpdate,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> DealOut:
-    result = await db.execute(
-        select(Deal)
-        .where(Deal.id == deal_id)
-        .options(selectinload(Deal.deck))
-    )
-    deal = result.scalar_one_or_none()
-    if deal is None or deal.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="Deal not found")
-
-    try:
-        deal.stage = DealStage(body.stage)
-        deal.custom_stage = None
-    except ValueError:
-        deal.stage = DealStage.partner_review
-        deal.custom_stage = body.stage
-
-    await db.commit()
-    await db.refresh(deal)
-    return _deal_out(deal)
-
-
 @router.delete("/{deal_id}", status_code=204)
 async def delete_deal(
     deal_id: uuid.UUID,

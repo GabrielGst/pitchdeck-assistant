@@ -1,7 +1,7 @@
 """Tests for pipeline stage configuration (issue #12)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.models.base import Role, Tenant, User
 from app.models.pipeline import TenantConfig
+from tests.conftest import mock_db_session, mock_user
 
 TENANT = Tenant(id=uuid.uuid4(), name="VC Fund", slug="vc-fund")
 ADMIN = User(
@@ -49,8 +50,8 @@ async def test_get_pipeline_config_returns_defaults():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.get("/pipeline-config")
 
@@ -69,8 +70,8 @@ async def test_put_pipeline_config_non_admin_forbidden():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.put("/pipeline-config", json={"stage_labels": {}, "custom_stages": []})
 
@@ -94,8 +95,8 @@ async def test_put_pipeline_config_admin_saves():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ADMIN),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ADMIN),
+            mock_db_session(mock_db),
         ):
             resp = await c.put("/pipeline-config", json=payload)
 
@@ -121,8 +122,8 @@ async def test_put_pipeline_config_exceeds_3_custom_stages():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ADMIN),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ADMIN),
+            mock_db_session(mock_db),
         ):
             resp = await c.put("/pipeline-config", json=payload)
 
@@ -140,8 +141,8 @@ async def test_put_pipeline_config_reserved_key_rejected():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ADMIN),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ADMIN),
+            mock_db_session(mock_db),
         ):
             resp = await c.put("/pipeline-config", json=payload)
 

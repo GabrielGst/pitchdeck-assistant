@@ -1,13 +1,14 @@
 """Tests for the analytics endpoint (issue #10)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.models.base import Role, Tenant, User
+from tests.conftest import mock_db_session, mock_user
 
 TENANT = Tenant(id=uuid.uuid4(), name="VC Fund", slug="vc-fund")
 ANALYST = User(
@@ -66,8 +67,8 @@ async def test_analytics_returns_correct_shape():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.get("/analytics")
 
@@ -106,8 +107,8 @@ async def test_analytics_pass_rate_none_when_no_terminal_deals():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.get("/analytics")
 

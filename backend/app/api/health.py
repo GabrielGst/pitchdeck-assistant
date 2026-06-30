@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.worker.tasks import ping
 
 router = APIRouter()
 
@@ -31,7 +32,6 @@ async def health() -> dict[str, object]:
 
     # Celery (fire-and-forget ping — doesn't block the health check)
     try:
-        from app.worker.tasks import ping
         ping.delay()
         services["celery"] = "ok"
     except Exception as e:

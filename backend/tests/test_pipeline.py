@@ -34,9 +34,6 @@ DEAL_IN_INBOX = Deal(
 
 def _mock_session_for_user(user: User, deal: Deal | None = DEAL_IN_INBOX):
     """Returns a mock AsyncSession that resolves the given user and deal."""
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = user
-
     transition = PipelineTransition(
         id=uuid.uuid4(),
         deal_id=deal.id if deal else uuid.uuid4(),
@@ -47,8 +44,18 @@ def _mock_session_for_user(user: User, deal: Deal | None = DEAL_IN_INBOX):
         created_at=datetime.now(UTC),
     )
 
+    _execute_count = 0
+
+    def _execute_side_effect(*args, **kwargs):
+        nonlocal _execute_count
+        _execute_count += 1
+        result = MagicMock()
+        # First call is get_current_user looking up User by clerk_user_id
+        result.scalar_one_or_none.return_value = user if _execute_count == 1 else None
+        return result
+
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=mock_result)
+    session.execute = AsyncMock(side_effect=_execute_side_effect)
     session.get = AsyncMock(side_effect=lambda model, pk: deal if model == Deal else TENANT)
     session.add = MagicMock()
     session.commit = AsyncMock()
@@ -56,6 +63,11 @@ def _mock_session_for_user(user: User, deal: Deal | None = DEAL_IN_INBOX):
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=None)
     return session
+
+
+@pytest.fixture(autouse=True)
+def reset_deal_stage():
+    DEAL_IN_INBOX.stage = DealStage.inbox
 
 
 @pytest.fixture

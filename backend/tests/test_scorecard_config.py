@@ -1,13 +1,14 @@
 """Tests for per-tenant scorecard configuration (issue #8)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.models.base import Role, Tenant, User
+from tests.conftest import mock_db_session, mock_user
 
 TENANT = Tenant(id=uuid.uuid4(), name="ACME VC", slug="acme-vc")
 ADMIN = User(
@@ -31,7 +32,7 @@ def _make_client():
 
 
 def _auth_patch(user: User):
-    return patch("app.api.deps.get_current_user", return_value=user)
+    return mock_user(user)
 
 
 @pytest.mark.anyio
@@ -50,7 +51,7 @@ async def test_get_scorecard_config_empty():
     async with _make_client() as client:
         with (
             _auth_patch(ANALYST),
-            patch("app.core.database.get_db", return_value=mock_session),
+            mock_db_session(mock_session),
         ):
             resp = await client.get("/scorecard-config")
 
@@ -125,7 +126,7 @@ async def test_set_scorecard_config_valid():
     async with _make_client() as client:
         with (
             _auth_patch(ADMIN),
-            patch("app.core.database.get_db", return_value=mock_session),
+            mock_db_session(mock_session),
         ):
             resp = await client.put(
                 "/scorecard-config",

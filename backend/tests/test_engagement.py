@@ -2,13 +2,14 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.models.base import DealStage, Role, Tenant, User
+from tests.conftest import mock_db_session, mock_user
 
 TENANT = Tenant(id=uuid.uuid4(), name="VC Fund", slug="vc-fund")
 ANALYST = User(
@@ -63,8 +64,8 @@ async def test_engagement_stores_events():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.post("/events/engagement", json=payload)
 
@@ -89,8 +90,8 @@ async def test_engagement_unknown_event_types_are_dropped():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.post("/events/engagement", json=payload)
 
@@ -111,8 +112,8 @@ async def test_engagement_wrong_tenant_returns_404():
 
     async with _client() as c:
         with (
-            patch("app.api.deps.get_current_user", return_value=ANALYST),
-            patch("app.core.database.get_db", return_value=mock_db),
+            mock_user(ANALYST),
+            mock_db_session(mock_db),
         ):
             resp = await c.post("/events/engagement", json=payload)
 
