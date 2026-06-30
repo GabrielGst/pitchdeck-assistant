@@ -185,7 +185,8 @@ def triage_deck(self, deck_id: str, tenant_id: str) -> dict:  # type: ignore[mis
     the result in deal.triage. Fires in parallel with corpus indexing so it
     does not delay the SSE analysis stream.
     """
-    from sqlalchemy import create_engine, select as sa_select
+    from sqlalchemy import create_engine
+    from sqlalchemy import select as sa_select
     from sqlalchemy.orm import Session
 
     from app.core.config import settings
