@@ -6,14 +6,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.base import Deal, DealStage, Deck, DeckStatus, User
 from app.services.document_parser import SUPPORTED_MIME_TYPES
 
 router = APIRouter(prefix="/decks", tags=["decks"])
 
-UPLOAD_DIR = Path("/app/uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = Path(settings.upload_dir)
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 

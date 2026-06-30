@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     debug: bool = True
+    upload_dir: str = "/app/uploads"
 
 
 settings = Settings()

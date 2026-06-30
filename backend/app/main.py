@@ -1,3 +1,7 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,10 +20,18 @@ from app.api.routes.thesis import router as thesis_router
 from app.api.users import router as users_router
 from app.core.config import settings
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    yield
+
+
 app = FastAPI(
     title="Pitchdeck Assistant API",
     version="0.1.0",
     debug=settings.debug,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
