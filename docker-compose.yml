@@ -27,6 +27,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     environment:
       DATABASE_URL: postgresql+asyncpg://pitchdeck:pitchdeck@postgres:5432/pitchdeck
       DATABASE_URL_SYNC: postgresql://pitchdeck:pitchdeck@postgres:5432/pitchdeck
@@ -55,6 +56,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     environment:
       DATABASE_URL: postgresql+asyncpg://pitchdeck:pitchdeck@postgres:5432/pitchdeck
       DATABASE_URL_SYNC: postgresql://pitchdeck:pitchdeck@postgres:5432/pitchdeck
@@ -78,6 +80,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
     ports:
       - "127.0.0.1:3000:3000"
     environment:

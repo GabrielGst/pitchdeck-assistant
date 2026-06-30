@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pitchdeck-migrate
+  namespace: pitchdeck-prod
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/gabrielgst/pitchdeck-assistant/backend:${IMAGE_TAG}
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pitchdeck-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL_SYNC
+              value: postgresql://pitchdeck:$(POSTGRES_PASSWORD)@pitchdeck-postgres:5432/pitchdeck

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pitchdeck-redis
+  namespace: pitchdeck-prod
+spec:
+  serviceName: pitchdeck-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pitchdeck-redis
+  template:
+    metadata:
+      labels:
+        app: pitchdeck-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--appendonly", "yes"]
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitchdeck-redis
+  namespace: pitchdeck-prod
+spec:
+  selector:
+    app: pitchdeck-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  clusterIP: None

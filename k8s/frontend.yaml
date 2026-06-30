@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pitchdeck-frontend
+  namespace: pitchdeck-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pitchdeck-frontend
+  template:
+    metadata:
+      labels:
+        app: pitchdeck-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/gabrielgst/pitchdeck-assistant/frontend:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: API_URL
+              value: http://pitchdeck-backend:8000
+            - name: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+              value: /sign-in
+            - name: NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+              value: /dashboard
+            - name: NODE_ENV
+              value: production
+            - name: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pitchdeck-secrets
+                  key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pitchdeck-secrets
+                  key: CLERK_SECRET_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitchdeck-frontend
+  namespace: pitchdeck-prod
+spec:
+  selector:
+    app: pitchdeck-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000

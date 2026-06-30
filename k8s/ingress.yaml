@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pitchdeck-ingress
+  namespace: pitchdeck-prod
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - pitchdeck-assistant.webagab.fr
+      secretName: pitchdeck-tls-secret
+  rules:
+    - host: pitchdeck-assistant.webagab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pitchdeck-frontend
+                port:
+                  number: 3000

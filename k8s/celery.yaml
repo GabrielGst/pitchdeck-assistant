@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pitchdeck-celery
+  namespace: pitchdeck-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pitchdeck-celery
+  template:
+    metadata:
+      labels:
+        app: pitchdeck-celery
+    spec:
+      containers:
+        - name: celery
+          image: ghcr.io/gabrielgst/pitchdeck-assistant/backend:latest
+          command:
+            - celery
+            - -A
+            - app.worker.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=2
+          envFrom:
+            - secretRef:
+                name: pitchdeck-secrets
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pitchdeck-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: postgresql+asyncpg://pitchdeck:$(POSTGRES_PASSWORD)@pitchdeck-postgres:5432/pitchdeck
+            - name: DATABASE_URL_SYNC
+              value: postgresql://pitchdeck:$(POSTGRES_PASSWORD)@pitchdeck-postgres:5432/pitchdeck
+            - name: REDIS_URL
+              value: redis://pitchdeck-redis:6379/0
+            - name: CELERY_BROKER_URL
+              value: redis://pitchdeck-redis:6379/0
+            - name: CELERY_RESULT_BACKEND
+              value: redis://pitchdeck-redis:6379/1
+            - name: LANGFUSE_HOST
+              value: https://pitchdeck-langfuse.webagab.fr
+            - name: ENVIRONMENT
+              value: production
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: pitchdeck-uploads

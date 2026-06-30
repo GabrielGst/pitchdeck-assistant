@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pitchdeck-postgres
+  namespace: pitchdeck-prod
+spec:
+  serviceName: pitchdeck-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pitchdeck-postgres
+  template:
+    metadata:
+      labels:
+        app: pitchdeck-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: pitchdeck
+            - name: POSTGRES_DB
+              value: pitchdeck
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pitchdeck-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pitchdeck"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pitchdeck-postgres
+  namespace: pitchdeck-prod
+spec:
+  selector:
+    app: pitchdeck-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None

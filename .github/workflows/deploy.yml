@@ -1,0 +1,124 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-deploy:
+    name: Build images & deploy to MKS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      REGISTRY: ghcr.io
+      BACKEND_IMAGE: ghcr.io/gabrielgst/pitchdeck-assistant/backend
+      FRONTEND_IMAGE: ghcr.io/gabrielgst/pitchdeck-assistant/frontend
+      IMAGE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: prod
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: prod
+          push: true
+          build-args: |
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Create/update app secret
+        run: |
+          kubectl create secret generic pitchdeck-secrets \
+            --namespace=pitchdeck-prod \
+            --from-literal=CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
+            --from-literal=MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
+            --from-literal=NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" \
+            --from-literal=LANGFUSE_PUBLIC_KEY="${{ secrets.LANGFUSE_PUBLIC_KEY }}" \
+            --from-literal=LANGFUSE_SECRET_KEY="${{ secrets.LANGFUSE_SECRET_KEY }}" \
+            --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply infrastructure manifests
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/redis.yaml
+          kubectl apply -f k8s/uploads-pvc.yaml
+
+      - name: Wait for postgres ready
+        run: kubectl rollout status statefulset/pitchdeck-postgres -n pitchdeck-prod --timeout=120s
+
+      - name: Run database migrations
+        run: |
+          kubectl delete job pitchdeck-migrate -n pitchdeck-prod --ignore-not-found=true
+          IMAGE_TAG=${{ env.IMAGE_TAG }} envsubst < k8s/migrate-job.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/pitchdeck-migrate \
+            -n pitchdeck-prod --timeout=120s
+          kubectl delete job pitchdeck-migrate -n pitchdeck-prod
+
+      - name: Apply app manifests
+        run: |
+          kubectl apply -f k8s/backend.yaml
+          kubectl apply -f k8s/celery.yaml
+          kubectl apply -f k8s/frontend.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Update images to new tag
+        run: |
+          kubectl set image deployment/pitchdeck-backend \
+            backend=${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }} \
+            -n pitchdeck-prod
+          kubectl set image deployment/pitchdeck-celery \
+            celery=${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }} \
+            -n pitchdeck-prod
+          kubectl set image deployment/pitchdeck-frontend \
+            frontend=${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }} \
+            -n pitchdeck-prod
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/pitchdeck-backend -n pitchdeck-prod --timeout=180s
+          kubectl rollout status deployment/pitchdeck-frontend -n pitchdeck-prod --timeout=180s
