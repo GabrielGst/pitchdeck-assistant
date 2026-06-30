@@ -13,7 +13,7 @@ from pptx import Presentation
 from pptx.util import Inches
 
 from app.main import app
-from app.models.base import Deal, DealStage, Deck, DeckStatus, Role, Tenant, User
+from app.models.base import Role, Tenant, User
 
 MOCK_TENANT = Tenant(id=uuid.uuid4(), name="Test VC", slug="test-vc")
 MOCK_USER = User(

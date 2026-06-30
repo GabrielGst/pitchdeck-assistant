@@ -7,7 +7,13 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.models.analysis import AnalysisResult, AnalysisStatus, DDQuestion, RiskLevel, ScorecardScore
+from app.models.analysis import (
+    AnalysisResult,
+    AnalysisStatus,
+    DDQuestion,
+    RiskLevel,
+    ScorecardScore,
+)
 from app.models.base import Role, Tenant, User
 
 TENANT = Tenant(id=uuid.uuid4(), name="Test VC", slug="test-vc")

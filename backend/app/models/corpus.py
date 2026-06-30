@@ -12,7 +12,7 @@ from app.core.database import Base
 EMBEDDING_DIM = 1024
 
 
-class DocIndexStatus(str, enum.Enum):
+class DocIndexStatus(enum.StrEnum):
     pending = "pending"
     indexed = "indexed"
     failed = "failed"

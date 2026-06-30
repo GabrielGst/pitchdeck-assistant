@@ -5,10 +5,8 @@ LLM calls are mocked; tests assert output structure and graceful degradation.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from app.services.analysis_service import _parse_dd_questions, _parse_scorecard, _strip_fences
 from app.models.analysis import UNIVERSAL_DIMENSIONS
+from app.services.analysis_service import _parse_dd_questions, _parse_scorecard, _strip_fences
 
 
 def test_strip_fences_removes_markdown():

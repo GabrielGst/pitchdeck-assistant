@@ -5,7 +5,7 @@ Events are stored for future model training; no UI reads this data in v1.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -64,7 +64,7 @@ async def ingest_engagement(
             event_type=ev.event_type,
             section=ev.section,
             value=ev.value,
-            timestamp=ev.timestamp.astimezone(timezone.utc).replace(tzinfo=None),
+            timestamp=ev.timestamp.astimezone(UTC).replace(tzinfo=None),
         ))
 
     await db.commit()

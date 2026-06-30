@@ -1,7 +1,7 @@
 """Tests for the engagement event ingestion endpoint (issue #11)."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,7 +34,7 @@ def _event(event_type="section_dwell", section="scorecard", value=12.5):
         "event_type": event_type,
         "section": section,
         "value": value,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

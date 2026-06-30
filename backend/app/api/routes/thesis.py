@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
-from app.core.config import settings
 from app.core.database import get_db
 from app.models.base import Role, User
 from app.models.corpus import DocIndexStatus, ThesisDocument
@@ -70,7 +69,7 @@ async def upload_thesis_doc(
     if file.content_type not in SUPPORTED_TYPES:
         raise HTTPException(
             status_code=422,
-            detail=f"Unsupported file type. Accepted: PDF, PPTX, DOCX, TXT, MD",
+            detail="Unsupported file type. Accepted: PDF, PPTX, DOCX, TXT, MD",
         )
 
     content = await file.read()

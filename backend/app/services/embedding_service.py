@@ -15,12 +15,11 @@ import uuid
 from typing import TYPE_CHECKING
 
 import litellm
-from sqlalchemy import func as sql_func
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.corpus import CorpusAChunk, CorpusBChunk, EMBEDDING_DIM
+from app.models.corpus import EMBEDDING_DIM, CorpusAChunk, CorpusBChunk
 
 if TYPE_CHECKING:
     pass

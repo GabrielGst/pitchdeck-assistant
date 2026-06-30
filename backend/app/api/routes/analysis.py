@@ -22,7 +22,13 @@ from app.api.deps import get_current_user
 from app.core.auth import verify_clerk_token
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.analysis import AnalysisResult, AnalysisStatus, DDQuestion, RiskLevel, ScorecardScore
+from app.models.analysis import (
+    AnalysisResult,
+    AnalysisStatus,
+    DDQuestion,
+    RiskLevel,
+    ScorecardScore,
+)
 from app.models.base import Deal, Deck, DeckStatus, User
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -148,7 +154,7 @@ async def _stream_analysis(
     while True:
         try:
             item = await asyncio.wait_for(queue.get(), timeout=15.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             yield ": keepalive\n\n"
             continue
         if item is None:

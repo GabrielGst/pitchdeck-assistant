@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.config import settings
 from app.core.database import get_db
 from app.models.base import Deal, DealStage, Deck, DeckStatus, User
 from app.services.document_parser import SUPPORTED_MIME_TYPES

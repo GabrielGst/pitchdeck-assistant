@@ -6,18 +6,17 @@ Aggregates deal pipeline stages, outcomes, scorecard averages, dwell time per
 stage, and a weekly invested-deal chart for the analytics dashboard.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import Float, Integer, cast, func, select, text
+from sqlalchemy import Float, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.analysis import AnalysisResult, ScorecardScore
 from app.models.base import Deal, DealStage, User
-from app.models.pipeline import PipelineTransition
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -126,7 +125,7 @@ async def get_analytics(
     ]
 
     # Weekly invested deal count — past 12 weeks (Mon–Sun buckets)
-    twelve_weeks_ago = datetime.now(timezone.utc) - timedelta(weeks=12)
+    twelve_weeks_ago = datetime.now(UTC) - timedelta(weeks=12)
     weekly_rows = await db.execute(
         text("""
             SELECT

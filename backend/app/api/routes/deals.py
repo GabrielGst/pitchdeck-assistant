@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.base import Deal, DealStage, Deck, User
+from app.models.base import Deal, DealStage, User
 
 router = APIRouter(prefix="/deals", tags=["deals"])
 

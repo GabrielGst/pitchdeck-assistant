@@ -4,6 +4,7 @@ These are pure-function tests with no I/O beyond reading fixture bytes.
 """
 
 import io
+
 import pytest
 
 from app.services.document_parser import (

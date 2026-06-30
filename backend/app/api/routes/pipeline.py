@@ -10,14 +10,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from sqlalchemy import update
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.base import Deal, DealStage, PARTNER_ONLY_STAGES, Role, User
+from app.models.base import PARTNER_ONLY_STAGES, Deal, DealStage, Role, User
 from app.models.corpus import CorpusAChunk
 from app.models.pipeline import PipelineTransition, TenantConfig
 

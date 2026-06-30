@@ -4,14 +4,14 @@ These are the most critical tests in the codebase: they protect training label i
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.models.base import Deal, DealStage, PARTNER_ONLY_STAGES, Role, Tenant, User
+from app.models.base import PARTNER_ONLY_STAGES, Deal, DealStage, Role, Tenant, User
 from app.models.pipeline import PipelineTransition
 
 TENANT = Tenant(id=uuid.uuid4(), name="Test VC", slug="test-vc")
@@ -27,8 +27,8 @@ DEAL_IN_INBOX = Deal(
     deck_id=uuid.uuid4(),
     company_name="Acme",
     stage=DealStage.inbox,
-    created_at=datetime.now(timezone.utc),
-    updated_at=datetime.now(timezone.utc),
+    created_at=datetime.now(UTC),
+    updated_at=datetime.now(UTC),
 )
 
 
@@ -44,7 +44,7 @@ def _mock_session_for_user(user: User, deal: Deal | None = DEAL_IN_INBOX):
         actor_id=user.id,
         from_stage=deal.stage if deal else None,
         to_stage=DealStage.screening,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     session = AsyncMock()
@@ -97,7 +97,7 @@ async def test_partner_can_move_to_invested(client: AsyncClient) -> None:
     deal = Deal(
         id=uuid.uuid4(), tenant_id=TENANT.id, deck_id=uuid.uuid4(),
         company_name="Acme", stage=DealStage.partner_review,
-        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
     )
     session = _mock_session_for_user(PARTNER, deal)
     with (
@@ -147,7 +147,7 @@ async def test_terminal_deal_cannot_be_moved(client: AsyncClient) -> None:
     invested_deal = Deal(
         id=uuid.uuid4(), tenant_id=TENANT.id, deck_id=uuid.uuid4(),
         company_name="Portfolio Co", stage=DealStage.invested,
-        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
     )
     session = _mock_session_for_user(PARTNER, invested_deal)
     with (

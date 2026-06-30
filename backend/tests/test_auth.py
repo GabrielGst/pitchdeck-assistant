@@ -83,9 +83,6 @@ async def test_require_role_rejects_insufficient_role(client: AsyncClient) -> No
     """Analyst cannot reach partner-only endpoints (tested via the stage transition gate in #4)."""
     # The require_role dependency is exercised via the actual protected routes.
     # This test validates the 403 path using a stub endpoint.
-    from fastapi import Depends
-    from app.api.deps import require_role
-    from app.models.base import Role
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = MOCK_USER  # analyst

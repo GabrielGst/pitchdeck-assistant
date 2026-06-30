@@ -3,19 +3,19 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 
-class AnalysisStatus(str, enum.Enum):
+class AnalysisStatus(enum.StrEnum):
     pending = "pending"
     complete = "complete"
     failed = "failed"
 
 
-class RiskLevel(str, enum.Enum):
+class RiskLevel(enum.StrEnum):
     low = "low"
     medium = "medium"
     high = "high"

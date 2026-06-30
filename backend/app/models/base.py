@@ -9,21 +9,21 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
-class Role(str, enum.Enum):
+class Role(enum.StrEnum):
     analyst = "analyst"
     associate = "associate"
     partner = "partner"
     admin = "admin"
 
 
-class DeckStatus(str, enum.Enum):
+class DeckStatus(enum.StrEnum):
     pending = "pending"
     processing = "processing"
     processed = "processed"
     failed = "failed"
 
 
-class DealStage(str, enum.Enum):
+class DealStage(enum.StrEnum):
     inbox = "inbox"
     screening = "screening"
     due_diligence = "due_diligence"
