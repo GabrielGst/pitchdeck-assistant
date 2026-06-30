@@ -24,6 +24,8 @@ spec:
               value: pitchdeck
             - name: POSTGRES_DB
               value: pitchdeck
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
