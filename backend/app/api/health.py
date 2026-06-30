@@ -24,7 +24,7 @@ async def health() -> dict[str, object]:
     try:
         redis = Redis.from_url(settings.redis_url)
         await redis.ping()
-        await redis.aclose()
+        await redis.aclose()  # type: ignore[attr-defined]
         services["redis"] = "ok"
     except Exception as e:
         services["redis"] = f"error: {e}"

@@ -147,7 +147,7 @@ def generate(
     deal_id: str,
     tenant_id: str,
     thesis_context: str = "",
-    custom_dims: list[dict] = [],
+    custom_dims: list[dict[str, Any]] | None = None,
 ) -> Iterator[tuple[str, Any]]:
     """
     Generator that yields (event_type, payload) tuples as analysis is produced.
@@ -263,11 +263,11 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
-def _parse_scorecard(text: str, custom_dims: list[dict]) -> list[dict]:
+def _parse_scorecard(text: str, custom_dims: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     try:
         data = json.loads(_strip_fences(text))
         dims = data.get("dimensions", [])
-        custom_keys = {d["key"] for d in custom_dims}
+        custom_keys = {d["key"] for d in (custom_dims or [])}
         return [
             {
                 "key": d["key"],
@@ -283,7 +283,7 @@ def _parse_scorecard(text: str, custom_dims: list[dict]) -> list[dict]:
         return [{"key": k, "score": 3, "rationale": "Could not parse LLM output", "is_custom": False} for k in UNIVERSAL_DIMENSIONS]
 
 
-def _parse_dd_questions(text: str) -> list[dict]:
+def _parse_dd_questions(text: str) -> list[dict[str, Any]]:
     try:
         items = json.loads(_strip_fences(text))
         if not isinstance(items, list):

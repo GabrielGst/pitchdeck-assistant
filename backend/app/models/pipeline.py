@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -39,9 +40,9 @@ class TenantConfig(Base):
         unique=True,
     )
     # {"inbox": "Inbox", "screening": "First Look", ...}
-    stage_labels: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    stage_labels: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     # [{"key": "ic_prep", "label": "IC Prep", "after": "partner_review"}, ...]
-    custom_stages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    custom_stages: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     # [{"key": "founder_market_fit", "label": "Founder-Market Fit", "description": "..."}, ...]
-    custom_scorecard_dims: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    custom_scorecard_dims: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

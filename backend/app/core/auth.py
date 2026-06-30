@@ -1,23 +1,24 @@
 import time
+from typing import Any
 
 import httpx
 import jwt as pyjwt
 
 # Simple in-memory JWKS cache — keyed by issuer URL
-_cache: dict[str, dict] = {}
+_cache: dict[str, Any] = {}
 JWKS_TTL = 3600  # 1 hour
 
 
-async def _get_jwks(iss: str) -> list[dict]:
+async def _get_jwks(iss: str) -> list[dict[str, Any]]:
     now = time.monotonic()
     cached = _cache.get(iss)
     if cached and now - cached["fetched_at"] < JWKS_TTL:
-        return cached["keys"]  # type: ignore[return-value]
+        return list(cached["keys"])
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(f"{iss}/.well-known/jwks.json")
         resp.raise_for_status()
-        keys = resp.json()["keys"]
+        keys: list[dict[str, Any]] = resp.json()["keys"]
 
     _cache[iss] = {"keys": keys, "fetched_at": now}
     return keys
@@ -35,7 +36,7 @@ async def verify_clerk_token(token: str) -> str:
     signing_key = None
     for key_data in keys:
         if key_data.get("kid") == kid:
-            signing_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)  # type: ignore[attr-defined]
+            signing_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)  # type: ignore[attr-defined, assignment]
             break
 
     if signing_key is None:
@@ -43,7 +44,7 @@ async def verify_clerk_token(token: str) -> str:
 
     payload = pyjwt.decode(
         token,
-        signing_key,
+        signing_key,  # type: ignore[arg-type]
         algorithms=["RS256"],
         options={"verify_aud": False},
     )

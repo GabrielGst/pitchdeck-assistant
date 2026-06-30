@@ -10,6 +10,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException
@@ -74,7 +75,7 @@ async def _wait_for_extraction(deck_id: str, timeout: int = EXTRACTION_TIMEOUT) 
                 return True
     finally:
         await pubsub.unsubscribe(f"deck:{deck_id}:status")
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]
     return False
 
 
@@ -147,8 +148,8 @@ async def _stream_analysis(
     thread = threading.Thread(target=_run_generator, daemon=True)
     thread.start()
 
-    scorecard_data: list[dict] = []
-    dd_data: list[dict] = []
+    scorecard_data: list[dict[str, Any]] = []
+    dd_data: list[dict[str, Any]] = []
     memo_text = ""
 
     while True:
@@ -164,11 +165,11 @@ async def _stream_analysis(
         yield _sse(event, payload)
 
         if event == "scorecard":
-            scorecard_data = payload  # type: ignore[assignment]
+            scorecard_data = cast(list[dict[str, Any]], payload)
         elif event == "dd_questions":
-            dd_data = payload  # type: ignore[assignment]
+            dd_data = cast(list[dict[str, Any]], payload)
         elif event == "complete":
-            memo_text = payload.get("memo_text", "")  # type: ignore[union-attr]
+            memo_text = cast(dict[str, Any], payload).get("memo_text", "")
         elif event == "error":
             ar.status = AnalysisStatus.failed
             await db.commit()
@@ -236,8 +237,8 @@ class AnalysisOut(BaseModel):
     deal_id: uuid.UUID
     status: str
     llm_model: str | None
-    scorecard: list[dict]
-    dd_questions: list[dict]
+    scorecard: list[dict[str, Any]]
+    dd_questions: list[dict[str, Any]]
     memo_text: str | None
 
 

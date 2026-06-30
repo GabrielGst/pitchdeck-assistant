@@ -33,7 +33,7 @@ class TransitionOut(BaseModel):
     deal_id: uuid.UUID
     from_stage: str | None
     to_stage: str
-    actor_id: uuid.UUID
+    actor_id: uuid.UUID | None
     created_at: datetime
 
 

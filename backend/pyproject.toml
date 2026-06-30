@@ -51,8 +51,11 @@ select = ["F", "I", "UP"]
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_ignores = true
+disallow_any_generics = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

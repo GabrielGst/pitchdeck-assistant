@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -36,7 +37,7 @@ async def get_current_user(
     return user
 
 
-def require_role(*roles: Role) -> Callable:
+def require_role(*roles: Role) -> Callable[..., Any]:
     """Dependency factory that enforces one of the given roles."""
 
     async def check(user: User = Depends(get_current_user)) -> User:
