@@ -96,7 +96,7 @@ jobs:
           kubectl delete job pitchdeck-migrate -n pitchdeck-prod --ignore-not-found=true
           IMAGE_TAG=${{ env.IMAGE_TAG }} envsubst < k8s/migrate-job.yaml | kubectl apply -f -
           kubectl wait --for=condition=complete job/pitchdeck-migrate \
-            -n pitchdeck-prod --timeout=120s
+            -n pitchdeck-prod --timeout=300s
           kubectl delete job pitchdeck-migrate -n pitchdeck-prod
 
       - name: Apply app manifests
