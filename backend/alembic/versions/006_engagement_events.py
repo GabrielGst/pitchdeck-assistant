@@ -20,6 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Migration 003 created engagement_events with an old schema (JSONB value,
+    # no tenant_id FK). Drop it and recreate with the correct schema.
+    op.drop_index("ix_engagement_events_deal_id", "engagement_events")
+    op.drop_table("engagement_events")
     op.create_table(
         "engagement_events",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
