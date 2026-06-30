@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import {
   Table,
   TableBody,
@@ -107,14 +109,20 @@ export default async function AnalyticsPage() {
   ];
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">Deal outcomes and scoring benchmarks</p>
-        </div>
-
-        <Separator />
+    <SidebarInset>
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Analytics</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </header>
+      <div className="flex flex-1 flex-col gap-6 p-6">
+      <div className="max-w-5xl space-y-6">
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {stats.map(({ label, value }) => (
@@ -226,6 +234,7 @@ export default async function AnalyticsPage() {
           </Card>
         )}
       </div>
-    </main>
+      </div>
+    </SidebarInset>
   );
 }

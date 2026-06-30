@@ -4,6 +4,8 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { UploadButton } from "@/components/UploadButton";
 import { apiFetch } from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb";
 
 interface Column {
   stage: string;
@@ -48,24 +50,31 @@ export default async function PipelinePage() {
   if (totalDeals === 0) redirect("/onboarding");
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Deal Pipeline</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              {totalDeals} {totalDeals === 1 ? "deal" : "deals"}
-            </p>
-          </div>
+    <SidebarInset>
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Pipeline</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {totalDeals} {totalDeals === 1 ? "deal" : "deals"}
+          </span>
           <UploadButton />
         </div>
-        <Separator />
+      </header>
+      <div className="flex flex-1 flex-col gap-4 p-6 overflow-x-auto">
         <KanbanBoard
           columns={columns}
           stageOrder={config.stage_order}
           stageLabels={config.stage_labels}
         />
       </div>
-    </main>
+    </SidebarInset>
   );
 }

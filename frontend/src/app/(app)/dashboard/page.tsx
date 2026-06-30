@@ -1,16 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
-import { UserButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  LayoutGrid,
-  BarChart3,
-  Settings,
-} from "lucide-react";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb";
+import { LayoutGrid, BarChart3, Settings } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -26,17 +23,6 @@ interface Analytics {
   pass_rate: number | null;
   by_stage: { stage: string; count: number }[];
 }
-
-const ROLE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
-  admin: "default",
-  partner: "default",
-  associate: "secondary",
-  analyst: "outline",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin", partner: "Partner", associate: "Associate", analyst: "Analyst",
-};
 
 const ACTIONS = [
   {
@@ -71,16 +57,16 @@ export default async function DashboardPage() {
 
   if (!profile) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <CardTitle>Account not provisioned</CardTitle>
-            <CardDescription>
-              Your account has not been added to a firm yet. Contact your administrator.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </main>
+      <SidebarInset>
+        <div className="flex flex-1 items-center justify-center p-8">
+          <Card className="max-w-md w-full">
+            <CardHeader>
+              <CardTitle>Account not provisioned</CardTitle>
+              <CardDescription>Contact your administrator.</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      </SidebarInset>
     );
   }
 
@@ -102,29 +88,30 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <main className="p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{profile.tenant.name}</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{profile.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant={ROLE_VARIANTS[profile.role] ?? "outline"}>
-              {ROLE_LABELS[profile.role] ?? profile.role}
-            </Badge>
-            <UserButton />
-          </div>
+    <SidebarInset>
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Dashboard</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{profile.tenant.name}</Badge>
+          <Badge variant="secondary" className="text-xs capitalize">{profile.role}</Badge>
         </div>
+      </header>
 
-        <Separator />
-
+      <div className="flex flex-1 flex-col gap-6 p-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {stats.map(({ label, value }) => (
             <Card key={label}>
               <CardContent className="pt-5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-                <p className="text-3xl font-bold mt-1 text-foreground">{value}</p>
+                <p className="text-3xl font-bold mt-1">{value}</p>
               </CardContent>
             </Card>
           ))}
@@ -137,15 +124,13 @@ export default async function DashboardPage() {
                 <CardHeader className="pb-3">
                   <Icon className="h-5 w-5 text-primary mb-1" />
                   <CardTitle className="text-base">{label}</CardTitle>
-                  <CardDescription className="text-xs leading-relaxed">
-                    {description}
-                  </CardDescription>
+                  <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
                 </CardHeader>
               </Card>
             </Link>
           ))}
         </div>
       </div>
-    </main>
+    </SidebarInset>
   );
 }
