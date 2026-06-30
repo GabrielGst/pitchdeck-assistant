@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -385,9 +387,12 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
           <h2 className="text-base font-semibold mb-3">Investment Memo</h2>
           <Card>
             <CardContent className="pt-5 pb-5">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="prose prose-sm prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed"
+              >
                 {memo}
-              </pre>
+              </ReactMarkdown>
               <div ref={memoRef} />
             </CardContent>
           </Card>

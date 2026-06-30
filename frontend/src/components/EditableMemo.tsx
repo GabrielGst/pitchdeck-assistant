@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -84,9 +86,12 @@ export function EditableMemo({ dealId, initialText }: EditableMemoProps) {
       title="Click to edit"
     >
       <CardContent className="relative pt-5 pb-5">
-        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          className="prose prose-sm prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed"
+        >
           {text}
-        </pre>
+        </ReactMarkdown>
         <span className="absolute top-3 right-3 hidden rounded bg-primary/10 px-2 py-0.5 text-xs text-primary group-hover:block">
           Edit
         </span>
