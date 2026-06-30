@@ -27,6 +27,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://pitchdeck-assistant.webagab.fr",
+        "https://pitchdeck-assistant-dev.webagab.fr",
     ],
     allow_credentials=True,
     allow_methods=["*"],

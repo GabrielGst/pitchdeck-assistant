@@ -39,11 +39,11 @@ spec:
                   key: CLERK_SECRET_KEY
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 30m
+              memory: 64Mi
             limits:
-              cpu: 300m
-              memory: 512Mi
+              cpu: 500m
+              memory: 768Mi
           readinessProbe:
             httpGet:
               path: /
