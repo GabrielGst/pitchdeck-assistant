@@ -31,7 +31,14 @@ export function UploadButton() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: "Upload failed" }));
-        throw new Error(body.detail ?? "Upload failed");
+        const detail = body.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((e: { msg?: string }) => e.msg ?? "Unknown error").join(", ")
+              : "Upload failed";
+        throw new Error(message);
       }
       const deck = await res.json();
       router.push(`/deals/${deck.deal_id}`);

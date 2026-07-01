@@ -27,7 +27,7 @@ export async function GET(
     },
   ).catch(() => null);
 
-  if (!upstream?.ok || !upstream.body) {
+  if (!upstream || upstream.status !== 200 || !upstream.body) {
     return new Response("Backend unavailable", {
       status: upstream?.status ?? 502,
     });

@@ -13,6 +13,7 @@ const DROP_REQUEST = new Set([
   "te",
   "trailer",
   "upgrade",
+  "content-length", // let fetch recalculate from the buffered blob
 ]);
 
 const DROP_RESPONSE = new Set([
@@ -38,14 +39,25 @@ async function proxy(
   });
 
   const hasBody = !["GET", "HEAD", "DELETE"].includes(method);
+  const isMultipart = (request.headers.get("content-type") ?? "").includes("multipart/form-data");
 
   try {
+    let body: BodyInit | undefined;
+    if (hasBody) {
+      if (isMultipart) {
+        // Re-emit as FormData so Node.js sets a fresh boundary and correct content-length.
+        // Drop content-type and content-length so fetch calculates them from the FormData.
+        body = await request.formData();
+        forwardHeaders.delete("content-type");
+      } else {
+        body = await request.blob();
+      }
+    }
+
     const upstream = await fetch(url, {
       method,
       headers: forwardHeaders,
-      body: hasBody ? request.body : undefined,
-      // @ts-expect-error — duplex required by Node.js fetch for streaming request bodies
-      duplex: "half",
+      body,
     });
 
     const responseHeaders = new Headers();
@@ -59,7 +71,8 @@ async function proxy(
       status: upstream.status,
       headers: responseHeaders,
     });
-  } catch {
+  } catch (err) {
+    console.error("[proxy] fetch failed", method, url, err);
     return NextResponse.json({ detail: "Gateway error" }, { status: 502 });
   }
 }

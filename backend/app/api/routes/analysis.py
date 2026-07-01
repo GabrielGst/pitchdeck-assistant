@@ -67,16 +67,18 @@ async def _wait_for_extraction(deck_id: str, timeout: int = EXTRACTION_TIMEOUT) 
     pubsub = r.pubsub()
     await pubsub.subscribe(f"deck:{deck_id}:status")
     try:
-        deadline = asyncio.get_event_loop().time() + timeout
-        async for message in pubsub.listen():
-            if asyncio.get_event_loop().time() > deadline:
-                return False
-            if message["type"] == "message" and message["data"] == b"EXTRACTION_COMPLETE":
-                return True
+        async def _listen() -> bool:
+            async for message in pubsub.listen():
+                if message["type"] == "message" and message["data"] == b"EXTRACTION_COMPLETE":
+                    return True
+            return False
+
+        return await asyncio.wait_for(_listen(), timeout=timeout)
+    except asyncio.TimeoutError:
+        return False
     finally:
         await pubsub.unsubscribe(f"deck:{deck_id}:status")
         await r.aclose()  # type: ignore[attr-defined]
-    return False
 
 
 async def _stream_analysis(
@@ -215,12 +217,16 @@ async def stream_analysis(
     if deck is None:
         raise HTTPException(status_code=404, detail="Deck not found")
 
-    # If deck is still processing, wait for extraction to complete
-    if deck.status == DeckStatus.processing:
+    # Wait for extraction whenever the deck hasn't finished yet.
+    # Covers both `pending` (Celery hasn't started) and `processing` (in progress).
+    if deck.status in (DeckStatus.pending, DeckStatus.processing):
         extracted = await _wait_for_extraction(str(deck.id))
         if not extracted:
             raise HTTPException(status_code=202, detail="Deck still processing — try again shortly")
         await db.refresh(deck)
+
+    if deck.status == DeckStatus.failed:
+        raise HTTPException(status_code=422, detail="Deck processing failed")
 
     if deck.status != DeckStatus.processed:
         raise HTTPException(status_code=202, detail="Deck not yet processed")
