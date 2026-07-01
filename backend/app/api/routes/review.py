@@ -124,7 +124,7 @@ async def get_review(
     deal_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, object]:
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Deal not found")

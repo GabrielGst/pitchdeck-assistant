@@ -242,14 +242,14 @@ class DDAnswerIn(BaseModel):
     answer: str
 
 
-@router.patch("/{deal_id}/dd-questions/{question_id}", response_model=dict)
+@router.patch("/{deal_id}/dd-questions/{question_id}", response_model=dict[str, bool])
 async def update_dd_answer(
     deal_id: uuid.UUID,
     question_id: uuid.UUID,
     body: DDAnswerIn,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, bool]:
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -267,13 +267,13 @@ class PartnerMemoIn(BaseModel):
     partner_memo: str
 
 
-@router.patch("/{deal_id}/partner-memo", response_model=dict)
+@router.patch("/{deal_id}/partner-memo", response_model=dict[str, bool])
 async def update_partner_memo(
     deal_id: uuid.UUID,
     body: PartnerMemoIn,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, bool]:
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Deal not found")

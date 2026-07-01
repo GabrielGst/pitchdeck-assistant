@@ -10,13 +10,13 @@ from app.api.routes.analysis import router as analysis_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.annotations import router as annotations_router
 from app.api.routes.chat import router as chat_router
-from app.api.routes.documents import router as documents_router
-from app.api.routes.review import router as review_router
 from app.api.routes.deals import router as deals_router
 from app.api.routes.decks import router as decks_router
+from app.api.routes.documents import router as documents_router
 from app.api.routes.events import router as events_router
 from app.api.routes.pipeline import router as pipeline_router
 from app.api.routes.pipeline_config import router as pipeline_config_router
+from app.api.routes.review import router as review_router
 from app.api.routes.scorecard_config import router as scorecard_config_router
 from app.api.routes.team import router as team_router
 from app.api.routes.thesis import router as thesis_router
