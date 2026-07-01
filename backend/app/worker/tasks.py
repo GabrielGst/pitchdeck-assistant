@@ -221,6 +221,34 @@ def triage_deck(self, deck_id: str, tenant_id: str) -> dict[str, Any]:
     return {"deck_id": deck_id, "status": "triaged"}
 
 
+@celery_app.task(name="worker.process_deal_document", bind=True, max_retries=3)
+def process_deal_document(self, document_id: str) -> dict[str, Any]:
+    """Extract text from a supplementary deal document."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.core.config import settings
+    from app.models.deal_documents import DealDocument
+    from app.services.document_parser import parse
+
+    engine = create_engine(settings.database_url_sync, echo=False)
+
+    with Session(engine) as session:
+        doc = session.get(DealDocument, uuid.UUID(document_id))
+        if doc is None:
+            return {"error": "document not found"}
+
+        try:
+            file_bytes = _load_file(doc.storage_path)
+            extracted = parse(file_bytes, doc.mime_type, doc.filename)
+            doc.extracted_text = extracted.full_text
+            session.commit()
+        except Exception as exc:
+            raise self.retry(exc=exc, countdown=30)
+
+    return {"document_id": document_id, "status": "extracted"}
+
+
 def _load_file(storage_path: str) -> bytes:
     """Load file bytes from storage. In dev, storage_path is an absolute local path."""
     import os

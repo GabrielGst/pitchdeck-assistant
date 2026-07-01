@@ -47,6 +47,7 @@ class AnalysisResult(Base):
     )
     memo_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     memo_edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    partner_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

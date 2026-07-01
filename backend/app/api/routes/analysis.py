@@ -238,6 +238,31 @@ async def stream_analysis(
     )
 
 
+class PartnerMemoIn(BaseModel):
+    partner_memo: str
+
+
+@router.patch("/{deal_id}/partner-memo", response_model=dict)
+async def update_partner_memo(
+    deal_id: uuid.UUID,
+    body: PartnerMemoIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    deal = await db.get(Deal, deal_id)
+    if deal is None or deal.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    result = await db.execute(select(AnalysisResult).where(AnalysisResult.deal_id == deal_id))
+    ar = result.scalar_one_or_none()
+    if ar is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    ar.partner_memo = body.partner_memo
+    await db.commit()
+    return {"ok": True}
+
+
 class AnalysisOut(BaseModel):
     id: uuid.UUID
     deal_id: uuid.UUID
@@ -246,6 +271,7 @@ class AnalysisOut(BaseModel):
     scorecard: list[dict[str, Any]]
     dd_questions: list[dict[str, Any]]
     memo_text: str | None
+    partner_memo: str | None
 
 
 @router.get("/{deal_id}", response_model=AnalysisOut)
@@ -272,6 +298,7 @@ async def get_analysis(
             scorecard=[],
             dd_questions=[],
             memo_text=None,
+            partner_memo=None,
         )
 
     await db.refresh(ar, ["scores", "dd_questions"])
@@ -290,4 +317,5 @@ async def get_analysis(
             for q in ar.dd_questions
         ],
         memo_text=ar.memo_edited_text or ar.memo_text,
+        partner_memo=ar.partner_memo,
     )

@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.health import router as health_router
 from app.api.routes.analysis import router as analysis_router
 from app.api.routes.analytics import router as analytics_router
+from app.api.routes.chat import router as chat_router
+from app.api.routes.documents import router as documents_router
+from app.api.routes.review import router as review_router
 from app.api.routes.annotations import router as annotations_router
 from app.api.routes.deals import router as deals_router
 from app.api.routes.decks import router as decks_router
@@ -59,3 +62,6 @@ app.include_router(scorecard_config_router)
 app.include_router(thesis_router)
 app.include_router(pipeline_router)
 app.include_router(team_router)
+app.include_router(documents_router)
+app.include_router(chat_router)
+app.include_router(review_router)
