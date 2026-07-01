@@ -167,15 +167,15 @@ export function DueDiligenceView({ dealId }: DueDiligenceViewProps) {
         </Card>
       </div>
 
-      {/* Right column: DD chat */}
-      <Card className="flex flex-col" style={{ minHeight: "600px" }}>
+      {/* Right column: DD chat — fixed height, sticks below the page header */}
+      <Card className="sticky top-16 flex flex-col h-[calc(100svh-4rem)]">
         <CardHeader className="pb-3 shrink-0">
           <CardTitle className="text-base">Due Diligence Assistant</CardTitle>
           <p className="text-xs text-muted-foreground">
             Ask questions about the deal. Uploaded documents and the screening analysis are included as context.
           </p>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col min-h-0">
+        <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
           <DealChat
             dealId={dealId}
             placeholder="Ask a due diligence question…"

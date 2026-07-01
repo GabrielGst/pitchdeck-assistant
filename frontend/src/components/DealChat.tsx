@@ -183,8 +183,9 @@ export function DealChat({
 
   return (
     <div className="flex h-full flex-col min-h-0">
+      <div className="flex flex-1 flex-col min-h-0">
       <MessageScrollerProvider>
-        <MessageScroller className="flex-1 min-h-0">
+        <MessageScroller className="h-full min-h-0">
           <MessageScrollerViewport>
             <MessageScrollerContent className="px-2 py-4">
               {messages.length === 0 && (
@@ -248,6 +249,7 @@ export function DealChat({
           <MessageScrollerButton />
         </MessageScroller>
       </MessageScrollerProvider>
+      </div>
 
       {/* Context reference pill */}
       {contextRef && (

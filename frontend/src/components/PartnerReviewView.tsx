@@ -315,8 +315,8 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
         </Card>
       </div>
 
-      {/* ── Right: AI / analyst chat ── */}
-      <div className="flex flex-col gap-3 min-h-0">
+      {/* ── Right: AI / analyst chat — sticks below the page header ── */}
+      <div className="sticky top-16 h-[calc(100svh-4rem)] flex flex-col gap-3">
         {/* Mode toggle */}
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -341,7 +341,7 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
           </button>
         </div>
 
-        <Card className="flex flex-col flex-1 min-h-0" style={{ minHeight: 500 }}>
+        <Card className="flex flex-col flex-1 min-h-0">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-sm">
               {chatMode === "ai" ? "AI Partner Assistant" : "Team Discussion"}

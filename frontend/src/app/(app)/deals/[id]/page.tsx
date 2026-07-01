@@ -169,7 +169,7 @@ export default async function DealPage({
       >
         <Sidebar
           collapsible="none"
-          className="hidden md:flex sticky top-0 h-full border-r"
+          className="hidden md:flex sticky top-16 h-[calc(100svh-4rem)] border-r"
         >
           <SidebarContent>
             <SidebarGroup>
@@ -193,7 +193,7 @@ export default async function DealPage({
           </SidebarContent>
         </Sidebar>
 
-        <div className="flex flex-1 flex-col overflow-auto p-6">
+        <div className="flex flex-1 flex-col p-6">
           {sectionContent()}
         </div>
       </SidebarProvider>
