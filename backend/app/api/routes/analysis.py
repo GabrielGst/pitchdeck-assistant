@@ -74,7 +74,7 @@ async def _wait_for_extraction(deck_id: str, timeout: int = EXTRACTION_TIMEOUT) 
             return False
 
         return await asyncio.wait_for(_listen(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False
     finally:
         await pubsub.unsubscribe(f"deck:{deck_id}:status")
