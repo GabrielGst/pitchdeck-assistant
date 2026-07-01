@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AnalysisStream } from "@/components/AnalysisStream";
 import { InboxView } from "@/components/InboxView";
+import { ScreeningView } from "@/components/ScreeningView";
 import { DueDiligenceView } from "@/components/DueDiligenceView";
 import { PartnerReviewView } from "@/components/PartnerReviewView";
 import { OutcomeActions } from "@/components/OutcomeActions";
@@ -114,11 +114,7 @@ export default async function DealPage({
           />
         );
       case "screening":
-        return (
-          <div className="max-w-4xl">
-            <AnalysisStream dealId={id} />
-          </div>
-        );
+        return <ScreeningView dealId={id} />;
       case "due_diligence":
         return <DueDiligenceView dealId={id} />;
       case "partner_review":

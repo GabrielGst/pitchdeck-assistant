@@ -238,6 +238,31 @@ async def stream_analysis(
     )
 
 
+class DDAnswerIn(BaseModel):
+    answer: str
+
+
+@router.patch("/{deal_id}/dd-questions/{question_id}", response_model=dict)
+async def update_dd_answer(
+    deal_id: uuid.UUID,
+    question_id: uuid.UUID,
+    body: DDAnswerIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    deal = await db.get(Deal, deal_id)
+    if deal is None or deal.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    q = await db.get(DDQuestion, question_id)
+    if q is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    q.answer = body.answer
+    await db.commit()
+    return {"ok": True}
+
+
 class PartnerMemoIn(BaseModel):
     partner_memo: str
 
@@ -313,7 +338,7 @@ async def get_analysis(
             for s in ar.scores
         ],
         dd_questions=[
-            {"id": str(q.id), "question": q.edited_question or q.question, "risk_level": q.risk_level.value, "position": q.position}
+            {"id": str(q.id), "question": q.edited_question or q.question, "risk_level": q.risk_level.value, "position": q.position, "answer": q.answer}
             for q in ar.dd_questions
         ],
         memo_text=ar.memo_edited_text or ar.memo_text,

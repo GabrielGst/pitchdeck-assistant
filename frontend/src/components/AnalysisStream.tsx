@@ -155,7 +155,7 @@ function useSectionDwell(
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function AnalysisStream({ dealId, onComplete }: { dealId: string; onComplete?: () => void }) {
+export function AnalysisStream({ dealId, onComplete, hideDDQuestions }: { dealId: string; onComplete?: () => void; hideDDQuestions?: boolean }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [scorecard, setScorecard] = useState<ScoreDim[]>([]);
   const [ddQuestions, setDdQuestions] = useState<DDItem[]>([]);
@@ -352,7 +352,7 @@ export function AnalysisStream({ dealId, onComplete }: { dealId: string; onCompl
         </section>
       )}
 
-      {ddQuestions.length > 0 && (
+      {ddQuestions.length > 0 && !hideDDQuestions && (
         <section ref={ddRef}>
           <h2 className="text-base font-semibold mb-3">Due Diligence Questions</h2>
           <ul className="space-y-2">

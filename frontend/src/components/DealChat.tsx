@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Bot, Send, User } from "lucide-react";
+import { Bot, Send, Sparkles, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +30,9 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 
+const SYNTHESIS_PROMPT =
+  "Please write a concise 2-3 sentence synthesis of our discussion above. Focus on the key insights, concerns, and decisions. This will be saved as a team comment for reference.";
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -40,7 +45,7 @@ interface DealChatProps {
   contextRef?: string | null;
   onContextRefClear?: () => void;
   placeholder?: string;
-  /** Called with the latest assistant response after each stream completes */
+  showSynthesisButton?: boolean;
   onAssistantResponse?: (text: string) => void;
 }
 
@@ -49,6 +54,7 @@ export function DealChat({
   contextRef,
   onContextRefClear,
   placeholder = "Ask a question about this deal…",
+  showSynthesisButton = false,
   onAssistantResponse,
 }: DealChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -75,15 +81,12 @@ export function DealChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealId]);
 
-  // Focus input when a contextRef arrives
   useEffect(() => {
     if (contextRef) inputRef.current?.focus();
   }, [contextRef]);
 
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput("");
+  async function streamChat(text: string, ctxRef: string | null) {
+    if (streaming) return;
     setStreaming(true);
 
     const tempUserId = `tmp-u-${Date.now()}`;
@@ -91,10 +94,9 @@ export function DealChat({
 
     setMessages((prev) => [
       ...prev,
-      { id: tempUserId, role: "user", content: text, contextRef },
+      { id: tempUserId, role: "user", content: text, contextRef: ctxRef },
       { id: tempAsstId, role: "assistant", content: "" },
     ]);
-    onContextRefClear?.();
 
     try {
       const token = await getToken();
@@ -104,7 +106,7 @@ export function DealChat({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: text, context_ref: contextRef ?? null }),
+        body: JSON.stringify({ message: text, context_ref: ctxRef }),
       });
 
       if (!res.ok || !res.body) {
@@ -174,12 +176,24 @@ export function DealChat({
     }
   }
 
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text) return;
+    setInput("");
+    onContextRefClear?.();
+    await streamChat(text, contextRef ?? null);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   }
+
+  const hasAssistantResponse = messages.some(
+    (m) => m.role === "assistant" && m.content,
+  );
 
   return (
     <div className="flex h-full flex-col min-h-0">
@@ -225,7 +239,18 @@ export function DealChat({
                           align={isUser ? "end" : "start"}
                         >
                           <BubbleContent>
-                            {msg.content || (
+                            {msg.content ? (
+                              isUser ? (
+                                <span className="whitespace-pre-wrap">{msg.content}</span>
+                              ) : (
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  className="prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2"
+                                >
+                                  {msg.content}
+                                </ReactMarkdown>
+                              )
+                            ) : (
                               <span className="inline-flex gap-1 items-center text-muted-foreground">
                                 <span className="animate-bounce delay-0">·</span>
                                 <span className="animate-bounce delay-100">·</span>
@@ -263,6 +288,22 @@ export function DealChat({
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Synthesis button — appears when there are AI responses */}
+      {showSynthesisButton && hasAssistantResponse && (
+        <div className="mb-2 flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={streaming}
+            onClick={() => streamChat(SYNTHESIS_PROMPT, null)}
+            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Sparkles className="size-3.5" />
+            Summarize discussion
+          </Button>
         </div>
       )}
 

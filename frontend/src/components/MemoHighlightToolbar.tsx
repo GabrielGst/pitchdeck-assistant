@@ -11,6 +11,7 @@ interface HighlightAction {
 interface MemoHighlightToolbarProps {
   containerRef: React.RefObject<HTMLElement | null>;
   onAction: (action: HighlightAction) => void;
+  allowedActions?: Array<HighlightAction["type"]>;
 }
 
 interface ToolbarPos {
@@ -22,6 +23,7 @@ interface ToolbarPos {
 export function MemoHighlightToolbar({
   containerRef,
   onAction,
+  allowedActions,
 }: MemoHighlightToolbarProps) {
   const [toolbar, setToolbar] = useState<ToolbarPos | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -91,24 +93,34 @@ export function MemoHighlightToolbar({
       style={{ left: toolbar.x, top: toolbar.y }}
     >
       <div className="flex items-center gap-0.5 rounded-lg border bg-popover px-1 py-1 shadow-lg shadow-black/10">
-        <ToolbarBtn
-          icon={<Bot className="size-3.5" />}
-          label="Chat with AI"
-          onClick={() => trigger("chat-ai")}
-          className="text-primary"
-        />
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <ToolbarBtn
-          icon={<MessageSquare className="size-3.5" />}
-          label="Make a comment"
-          onClick={() => trigger("comment")}
-        />
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <ToolbarBtn
-          icon={<Users className="size-3.5" />}
-          label="Chat with analyst"
-          onClick={() => trigger("chat-analyst")}
-        />
+        {(!allowedActions || allowedActions.includes("chat-ai")) && (
+          <ToolbarBtn
+            icon={<Bot className="size-3.5" />}
+            label="Chat with AI"
+            onClick={() => trigger("chat-ai")}
+            className="text-primary"
+          />
+        )}
+        {(!allowedActions || allowedActions.includes("comment")) && (
+          <>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <ToolbarBtn
+              icon={<MessageSquare className="size-3.5" />}
+              label="Make a comment"
+              onClick={() => trigger("comment")}
+            />
+          </>
+        )}
+        {(!allowedActions || allowedActions.includes("chat-analyst")) && (
+          <>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <ToolbarBtn
+              icon={<Users className="size-3.5" />}
+              label="Chat with analyst"
+              onClick={() => trigger("chat-analyst")}
+            />
+          </>
+        )}
       </div>
       {/* Caret pointing down */}
       <div className="mx-auto mt-px w-fit">

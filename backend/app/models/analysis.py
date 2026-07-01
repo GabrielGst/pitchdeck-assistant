@@ -92,6 +92,7 @@ class DDQuestion(Base):
         Enum(RiskLevel), nullable=False, default=RiskLevel.medium
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     analysis: Mapped["AnalysisResult"] = relationship("AnalysisResult", back_populates="dd_questions")
 

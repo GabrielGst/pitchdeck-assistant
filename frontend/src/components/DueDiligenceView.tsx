@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { AnalysisStream } from "@/components/AnalysisStream";
+import { DDAnswersList } from "@/components/DDAnswersList";
 import { DealChat } from "@/components/DealChat";
+import { MemoHighlightToolbar } from "@/components/MemoHighlightToolbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +28,9 @@ export function DueDiligenceView({ dealId }: DueDiligenceViewProps) {
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [contextRef, setContextRef] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const analysisRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
 
   const loadDocs = useCallback(async () => {
@@ -87,9 +91,20 @@ export function DueDiligenceView({ dealId }: DueDiligenceViewProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl">
-      {/* Left column: analysis + supplementary docs */}
+      {/* Left column: DD answers + analysis + supplementary docs */}
       <div className="space-y-6">
-        <AnalysisStream dealId={dealId} />
+        {/* DD questions from screening with answer fields */}
+        <DDAnswersList dealId={dealId} />
+
+        {/* Screening analysis (without DD questions — shown above) */}
+        <div ref={analysisRef}>
+          <AnalysisStream dealId={dealId} hideDDQuestions />
+          <MemoHighlightToolbar
+            containerRef={analysisRef}
+            allowedActions={["chat-ai"]}
+            onAction={({ selectedText }) => setContextRef(selectedText)}
+          />
+        </div>
 
         {/* Supplementary documents */}
         <Card>
@@ -172,13 +187,16 @@ export function DueDiligenceView({ dealId }: DueDiligenceViewProps) {
         <CardHeader className="pb-3 shrink-0">
           <CardTitle className="text-base">Due Diligence Assistant</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Ask questions about the deal. Uploaded documents and the screening analysis are included as context.
+            Select text from the analysis to ask about it. Uploaded documents are included as context.
           </p>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
           <DealChat
             dealId={dealId}
+            contextRef={contextRef}
+            onContextRefClear={() => setContextRef(null)}
             placeholder="Ask a due diligence question…"
+            showSynthesisButton
           />
         </CardContent>
       </Card>

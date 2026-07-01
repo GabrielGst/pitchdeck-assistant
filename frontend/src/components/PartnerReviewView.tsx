@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import { useAuth } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DealChat } from "@/components/DealChat";
+import { AnalystChat } from "@/components/AnalystChat";
 import { MemoHighlightToolbar } from "@/components/MemoHighlightToolbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +20,57 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MessageSquare, Save, Trash2 } from "lucide-react";
+
+// ── Memo text highlighting helpers ──────────────────────────────────────────
+
+function highlightText(text: string, refs: string[]): React.ReactNode {
+  if (!refs.length) return text;
+
+  let best: { idx: number; ref: string } | null = null;
+  for (const ref of refs) {
+    const idx = text.indexOf(ref);
+    if (idx !== -1 && (!best || idx < best.idx)) best = { idx, ref };
+  }
+  if (!best) return text;
+
+  const { idx, ref } = best;
+  return (
+    <>
+      {idx > 0 ? text.slice(0, idx) : null}
+      <mark
+        className="bg-amber-100 text-amber-900 rounded-sm px-0.5 cursor-pointer"
+        title="Referenced in a comment or AI discussion"
+      >
+        {ref}
+      </mark>
+      {idx + ref.length < text.length
+        ? highlightText(text.slice(idx + ref.length), refs)
+        : null}
+    </>
+  );
+}
+
+function processNode(node: React.ReactNode, refs: string[]): React.ReactNode {
+  if (typeof node === "string") return highlightText(node, refs);
+  if (!React.isValidElement(node)) return node;
+  const el = node as React.ReactElement<{ children?: React.ReactNode }>;
+  if (el.props.children === undefined) return node;
+  if (typeof el.props.children === "string") {
+    return React.cloneElement(el, { children: highlightText(el.props.children, refs) });
+  }
+  if (Array.isArray(el.props.children)) {
+    return React.cloneElement(el, {
+      children: (el.props.children as React.ReactNode[]).map((c, i) =>
+        React.isValidElement(processNode(c, refs))
+          ? React.cloneElement(processNode(c, refs) as React.ReactElement, { key: i })
+          : processNode(c, refs)
+      ),
+    });
+  }
+  return node;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 interface PartnerReviewViewProps {
   dealId: string;
@@ -65,6 +120,36 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
   const [lastAiContextRef, setLastAiContextRef] = useState<string | null>(null);
   const memoRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
+
+  const highlightRefs = useMemo(
+    () =>
+      comments
+        .map((c) => c.context_ref)
+        .filter((r): r is string => !!r && r.length > 4),
+    [comments],
+  );
+
+  const memoComponents = useMemo(() => {
+    if (!highlightRefs.length) return undefined;
+    const h = highlightRefs; // capture for closures
+    return {
+      p({ children }: { children?: React.ReactNode }) {
+        return <p>{React.Children.map(children, (c) => processNode(c, h))}</p>;
+      },
+      li({ children }: { children?: React.ReactNode }) {
+        return <li>{React.Children.map(children, (c) => processNode(c, h))}</li>;
+      },
+      h1({ children }: { children?: React.ReactNode }) {
+        return <h1>{React.Children.map(children, (c) => processNode(c, h))}</h1>;
+      },
+      h2({ children }: { children?: React.ReactNode }) {
+        return <h2>{React.Children.map(children, (c) => processNode(c, h))}</h2>;
+      },
+      h3({ children }: { children?: React.ReactNode }) {
+        return <h3>{React.Children.map(children, (c) => processNode(c, h))}</h3>;
+      },
+    };
+  }, [highlightRefs]);
 
   const loadAnalysis = useCallback(async () => {
     const token = await getToken();
@@ -190,8 +275,14 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
             {memoText ? (
               <>
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <div ref={memoRef as any} className="prose prose-sm max-w-none text-sm leading-relaxed select-text whitespace-pre-wrap">
-                  {memoText}
+                <div ref={memoRef as any} className="select-text">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className="prose prose-sm prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed"
+                    components={memoComponents}
+                  >
+                    {memoText}
+                  </ReactMarkdown>
                 </div>
                 <MemoHighlightToolbar
                   containerRef={memoRef}
@@ -353,32 +444,35 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
             )}
           </CardHeader>
           <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
-            <DealChat
-              dealId={dealId}
-              contextRef={contextRef}
-              onContextRefClear={() => setContextRef(null)}
-              placeholder={
-                chatMode === "ai"
-                  ? "Ask about the memo or deal…"
-                  : "Message the team…"
-              }
-              onAssistantResponse={(text) => {
-                setLastAiResponse(text);
-                setLastAiContextRef(contextRef);
-              }}
-            />
+            {chatMode === "ai" ? (
+              <DealChat
+                dealId={dealId}
+                contextRef={contextRef}
+                onContextRefClear={() => setContextRef(null)}
+                placeholder="Ask about the memo or deal…"
+                showSynthesisButton
+                onAssistantResponse={(text) => {
+                  setLastAiResponse(text);
+                  setLastAiContextRef(contextRef);
+                }}
+              />
+            ) : (
+              <AnalystChat
+                dealId={dealId}
+                contextRef={contextRef}
+                onContextRefClear={() => setContextRef(null)}
+              />
+            )}
           </CardContent>
         </Card>
 
-        {/* Save last AI response as comment */}
+        {/* Save AI response / synthesis as comment */}
         {lastAiResponse && chatMode === "ai" && (
           <Card className="shrink-0">
             <CardContent className="py-3 px-4">
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                Save last AI response as a comment?
-              </p>
-              <p className="text-xs text-muted-foreground line-clamp-2 mb-2 italic">
-                {lastAiResponse.slice(0, 160)}{lastAiResponse.length > 160 ? "…" : ""}
+              <p className="text-xs font-medium mb-1.5">Save as comment</p>
+              <p className="text-xs text-muted-foreground line-clamp-3 mb-2 italic">
+                {lastAiResponse.slice(0, 200)}{lastAiResponse.length > 200 ? "…" : ""}
               </p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={saveAiResponseAsComment}>
