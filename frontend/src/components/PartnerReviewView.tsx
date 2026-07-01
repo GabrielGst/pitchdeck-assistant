@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { DealChat } from "@/components/DealChat";
+import { MemoHighlightToolbar } from "@/components/MemoHighlightToolbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,18 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MessageSquare, Save, Trash2, User } from "lucide-react";
+import { MessageSquare, Save, Trash2 } from "lucide-react";
 
 interface PartnerReviewViewProps {
   dealId: string;
-}
-
-interface ReviewData {
-  id: string;
-  reviewer_id: string;
-  rating: string | null;
-  summary: string | null;
-  updated_at: string;
 }
 
 interface Comment {
@@ -37,6 +30,8 @@ interface Comment {
   created_at: string;
 }
 
+type ChatMode = "ai" | "analyst";
+
 const RATING_LABELS: Record<string, string> = {
   strong_yes: "Strong Yes",
   yes: "Yes",
@@ -46,20 +41,29 @@ const RATING_LABELS: Record<string, string> = {
 };
 
 const RATING_COLORS: Record<string, string> = {
-  strong_yes: "text-green-700 bg-green-100",
-  yes: "text-green-600 bg-green-50",
-  neutral: "text-yellow-700 bg-yellow-100",
-  no: "text-red-600 bg-red-50",
-  strong_no: "text-red-700 bg-red-100",
+  strong_yes: "text-green-700 bg-green-100 border-green-200",
+  yes: "text-green-600 bg-green-50 border-green-100",
+  neutral: "text-yellow-700 bg-yellow-100 border-yellow-200",
+  no: "text-red-600 bg-red-50 border-red-100",
+  strong_no: "text-red-700 bg-red-100 border-red-200",
 };
 
 export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
   const [memoText, setMemoText] = useState<string | null>(null);
   const [contextRef, setContextRef] = useState<string | null>(null);
-  const [pendingComment, setPendingComment] = useState<string | null>(null);
-  const [myReview, setMyReview] = useState<ReviewData | null>(null);
+  const [chatMode, setChatMode] = useState<ChatMode>("ai");
   const [comments, setComments] = useState<Comment[]>([]);
   const [rating, setRating] = useState<string>("");
+  const [savedRating, setSavedRating] = useState<string>("");
+  // inline comment state
+  const [pendingCommentText, setPendingCommentText] = useState<string | null>(null);
+  const [pendingCommentRef, setPendingCommentRef] = useState<string | null>(null);
+  const [commentInput, setCommentInput] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
+  // last AI response for save-as-comment
+  const [lastAiResponse, setLastAiResponse] = useState<string | null>(null);
+  const [lastAiContextRef, setLastAiContextRef] = useState<string | null>(null);
+  const memoRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
 
   const loadAnalysis = useCallback(async () => {
@@ -67,11 +71,9 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
     const res = await fetch(`/api/analysis/${dealId}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => null);
-    if (res?.ok) {
-      const data = await res.json();
-      const text = data.partner_memo || data.memo_text;
-      setMemoText(text ?? null);
-    }
+    if (!res?.ok) return;
+    const data = await res.json();
+    setMemoText(data.partner_memo || data.memo_text || null);
   }, [dealId, getToken]);
 
   const loadReview = useCallback(async () => {
@@ -79,13 +81,13 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
     const res = await fetch(`/api/deals/${dealId}/review`, {
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => null);
-    if (res?.ok) {
-      const data = await res.json();
-      setComments(data.comments ?? []);
-      if (data.reviews?.length > 0) {
-        setMyReview(data.reviews[0]);
-        setRating(data.reviews[0].rating ?? "");
-      }
+    if (!res?.ok) return;
+    const data = await res.json();
+    setComments(data.comments ?? []);
+    const myReview = data.reviews?.[0];
+    if (myReview?.rating) {
+      setRating(myReview.rating);
+      setSavedRating(myReview.rating);
     }
   }, [dealId, getToken]);
 
@@ -94,76 +96,108 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
     loadReview();
   }, [loadAnalysis, loadReview]);
 
-  function handleTextSelect() {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
-    const text = selection.toString().trim();
-    if (text.length > 10) {
-      setContextRef(text);
-    }
-  }
-
   async function saveRating() {
     if (!rating) return;
     const token = await getToken();
-    const res = await fetch(`/api/deals/${dealId}/review`, {
+    await fetch(`/api/deals/${dealId}/review`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ rating }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      setMyReview(data);
-    }
+    setSavedRating(rating);
   }
 
-  async function saveAsComment(body: string, aiAssisted: boolean, ref: string | null) {
+  async function submitInlineComment() {
+    if (!commentInput.trim()) return;
+    setSavingComment(true);
     const token = await getToken();
-    const res = await fetch(`/api/deals/${dealId}/comments`, {
+    await fetch(`/api/deals/${dealId}/comments`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ body, ai_assisted: aiAssisted, context_ref: ref }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        body: commentInput.trim(),
+        ai_assisted: false,
+        context_ref: pendingCommentRef,
+      }),
     });
-    if (res.ok) {
-      await loadReview();
-    }
+    setCommentInput("");
+    setPendingCommentText(null);
+    setPendingCommentRef(null);
+    setSavingComment(false);
+    await loadReview();
   }
 
-  async function deleteComment(commentId: string) {
+  async function saveAiResponseAsComment() {
+    if (!lastAiResponse) return;
     const token = await getToken();
-    await fetch(`/api/deals/${dealId}/comments/${commentId}`, {
+    await fetch(`/api/deals/${dealId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        body: lastAiResponse,
+        ai_assisted: true,
+        context_ref: lastAiContextRef,
+      }),
+    });
+    setLastAiResponse(null);
+    setLastAiContextRef(null);
+    await loadReview();
+  }
+
+  async function deleteComment(id: string) {
+    const token = await getToken();
+    await fetch(`/api/deals/${dealId}/comments/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    setComments((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  function handleHighlightAction({
+    type,
+    selectedText,
+  }: {
+    type: "chat-ai" | "comment" | "chat-analyst";
+    selectedText: string;
+  }) {
+    if (type === "chat-ai") {
+      setContextRef(selectedText);
+      setChatMode("ai");
+    } else if (type === "chat-analyst") {
+      setContextRef(selectedText);
+      setChatMode("analyst");
+    } else {
+      // inline comment
+      setPendingCommentText(selectedText);
+      setPendingCommentRef(selectedText);
+      setCommentInput("");
+    }
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl">
-      {/* Left column: memo + rating + comments */}
-      <div className="space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 h-full min-h-0">
+      {/* ── Left: memo + rating + comments ── */}
+      <div className="flex flex-col gap-6 overflow-y-auto">
         {/* Investment memo */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">Investment Memo</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Select text to discuss it with the AI.
+              Select text to chat with AI, make a comment, or discuss with an analyst.
             </p>
           </CardHeader>
           <CardContent>
             {memoText ? (
-              <div
-                onMouseUp={handleTextSelect}
-                className="prose prose-sm max-w-none text-sm leading-relaxed select-text cursor-text whitespace-pre-wrap"
-              >
-                {memoText}
-              </div>
+              <>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <div ref={memoRef as any} className="prose prose-sm max-w-none text-sm leading-relaxed select-text whitespace-pre-wrap">
+                  {memoText}
+                </div>
+                <MemoHighlightToolbar
+                  containerRef={memoRef}
+                  onAction={handleHighlightAction}
+                />
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">
                 No memo available yet. Run the screening analysis first.
@@ -172,69 +206,94 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
           </CardContent>
         </Card>
 
+        {/* Inline comment form */}
+        {pendingCommentText && (
+          <Card className="border-dashed">
+            <CardContent className="pt-4 space-y-2">
+              <blockquote className="border-l-2 border-primary pl-2 text-xs italic text-muted-foreground line-clamp-2">
+                &ldquo;{pendingCommentText}&rdquo;
+              </blockquote>
+              <Textarea
+                autoFocus
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                placeholder="Write your comment…"
+                rows={3}
+                className="text-sm resize-none"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={submitInlineComment} disabled={savingComment || !commentInput.trim()}>
+                  <Save className="size-3.5" />
+                  {savingComment ? "Saving…" : "Save comment"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setPendingCommentText(null); setPendingCommentRef(null); }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Rating */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">My Vote</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Select value={rating} onValueChange={(v) => setRating(v ?? "")}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Select…" />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(RATING_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={saveRating} disabled={!rating}>
-                <Save className="h-4 w-4" />
+              <Button size="sm" onClick={saveRating} disabled={!rating || rating === savedRating}>
+                <Save className="size-3.5" />
                 Save
               </Button>
-              {myReview?.rating && (
-                <Badge
-                  className={`text-xs ${RATING_COLORS[myReview.rating] ?? ""}`}
-                  variant="outline"
-                >
-                  {RATING_LABELS[myReview.rating]}
+              {savedRating && (
+                <Badge className={`text-xs ${RATING_COLORS[savedRating] ?? ""}`} variant="outline">
+                  {RATING_LABELS[savedRating]}
                 </Badge>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Comments */}
+        {/* Comments list */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
               Comments
               {comments.length > 0 && (
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  {comments.length}
-                </Badge>
+                <Badge variant="secondary" className="text-xs">{comments.length}</Badge>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {comments.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No comments yet. Chat with the AI about the memo and save responses as comments.
+                No comments yet. Select text in the memo to add a comment or save an AI response.
               </p>
             ) : (
               <ul className="space-y-3">
                 {comments.map((c) => (
-                  <li key={c.id} className="rounded-md border p-3 text-sm space-y-1">
+                  <li key={c.id} className="rounded-md border p-3 text-sm space-y-1.5">
                     {c.context_ref && (
-                      <blockquote className="border-l-2 border-muted-foreground/40 pl-2 text-xs italic text-muted-foreground line-clamp-2">
+                      <blockquote className="border-l-2 border-muted-foreground/30 pl-2 text-xs italic text-muted-foreground line-clamp-2">
                         &ldquo;{c.context_ref}&rdquo;
                       </blockquote>
                     )}
-                    <p className="whitespace-pre-wrap">{c.body}</p>
-                    <div className="flex items-center gap-2 pt-1">
+                    <p className="whitespace-pre-wrap leading-relaxed">{c.body}</p>
+                    <div className="flex items-center gap-2 pt-0.5">
                       {c.ai_assisted && (
                         <Badge variant="secondary" className="text-xs">AI-assisted</Badge>
                       )}
@@ -245,7 +304,7 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
                         onClick={() => deleteComment(c.id)}
                         className="text-muted-foreground hover:text-destructive"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="size-3.5" />
                       </button>
                     </div>
                   </li>
@@ -256,97 +315,84 @@ export function PartnerReviewView({ dealId }: PartnerReviewViewProps) {
         </Card>
       </div>
 
-      {/* Right column: AI chat */}
-      <div className="flex flex-col gap-4">
-        <Card className="flex flex-col" style={{ minHeight: "600px" }}>
-          <CardHeader className="pb-3 shrink-0">
-            <CardTitle className="text-base">Partner Review Assistant</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Select text in the memo to discuss it. Save AI responses as comments.
-            </p>
+      {/* ── Right: AI / analyst chat ── */}
+      <div className="flex flex-col gap-3 min-h-0">
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setChatMode("ai")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              chatMode === "ai"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            AI Assistant
+          </button>
+          <button
+            onClick={() => setChatMode("analyst")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              chatMode === "analyst"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Analyst Chat
+          </button>
+        </div>
+
+        <Card className="flex flex-col flex-1 min-h-0" style={{ minHeight: 500 }}>
+          <CardHeader className="pb-2 shrink-0">
+            <CardTitle className="text-sm">
+              {chatMode === "ai" ? "AI Partner Assistant" : "Team Discussion"}
+            </CardTitle>
+            {chatMode === "analyst" && (
+              <p className="text-xs text-muted-foreground">
+                Shared thread visible to all team members.
+              </p>
+            )}
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col min-h-0">
+          <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
             <DealChat
               dealId={dealId}
               contextRef={contextRef}
               onContextRefClear={() => setContextRef(null)}
-              placeholder="Ask about the memo or deal…"
+              placeholder={
+                chatMode === "ai"
+                  ? "Ask about the memo or deal…"
+                  : "Message the team…"
+              }
+              onAssistantResponse={(text) => {
+                setLastAiResponse(text);
+                setLastAiContextRef(contextRef);
+              }}
             />
           </CardContent>
         </Card>
 
-        {/* Quick-save last AI message as comment */}
-        <SaveLastResponseButton
-          dealId={dealId}
-          contextRef={contextRef}
-          onSaved={loadReview}
-        />
+        {/* Save last AI response as comment */}
+        {lastAiResponse && chatMode === "ai" && (
+          <Card className="shrink-0">
+            <CardContent className="py-3 px-4">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                Save last AI response as a comment?
+              </p>
+              <p className="text-xs text-muted-foreground line-clamp-2 mb-2 italic">
+                {lastAiResponse.slice(0, 160)}{lastAiResponse.length > 160 ? "…" : ""}
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={saveAiResponseAsComment}>
+                  <MessageSquare className="size-3.5" />
+                  Save as comment
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setLastAiResponse(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
-  );
-}
-
-function SaveLastResponseButton({
-  dealId,
-  contextRef,
-  onSaved,
-}: {
-  dealId: string;
-  contextRef: string | null;
-  onSaved: () => void;
-}) {
-  const [lastResponse, setLastResponse] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const { getToken } = useAuth();
-
-  // Poll latest assistant message from chat history
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const token = await getToken();
-      const res = await fetch(`/api/deals/${dealId}/chat`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => null);
-      if (!res?.ok || cancelled) return;
-      const msgs: { role: string; content: string }[] = await res.json();
-      const last = [...msgs].reverse().find((m) => m.role === "assistant");
-      if (!cancelled) setLastResponse(last?.content ?? null);
-    }
-    load();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealId]);
-
-  if (!lastResponse) return null;
-
-  async function save() {
-    if (!lastResponse) return;
-    setSaving(true);
-    const token = await getToken();
-    await fetch(`/api/deals/${dealId}/comments`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ body: lastResponse, ai_assisted: true, context_ref: contextRef }),
-    });
-    setSaving(false);
-    onSaved();
-  }
-
-  return (
-    <Card>
-      <CardContent className="pt-4">
-        <p className="text-xs text-muted-foreground mb-2 font-medium">
-          Save last AI response as a comment?
-        </p>
-        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{lastResponse}</p>
-        <Button size="sm" variant="outline" onClick={save} disabled={saving}>
-          <MessageSquare className="h-4 w-4" />
-          {saving ? "Saving…" : "Save as comment"}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }

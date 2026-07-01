@@ -2,13 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { Bot, Send, User } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Bot, Send, User, X } from "lucide-react";
+import {
+  Bubble,
+  BubbleContent,
+} from "@/components/ui/bubble";
+import {
+  Marker,
+  MarkerContent,
+} from "@/components/ui/marker";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+} from "@/components/ui/message";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
 
-interface Message {
+interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -17,45 +37,48 @@ interface Message {
 
 interface DealChatProps {
   dealId: string;
-  initialMessages?: Message[];
   contextRef?: string | null;
   onContextRefClear?: () => void;
   placeholder?: string;
+  /** Called with the latest assistant response after each stream completes */
+  onAssistantResponse?: (text: string) => void;
 }
 
 export function DealChat({
   dealId,
-  initialMessages = [],
   contextRef,
   onContextRefClear,
   placeholder = "Ask a question about this deal…",
+  onAssistantResponse,
 }: DealChatProps) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load history on mount
   useEffect(() => {
     let cancelled = false;
-    async function loadHistory() {
+    async function load() {
       const token = await getToken();
       const res = await fetch(`/api/deals/${dealId}/chat`, {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => null);
       if (!res?.ok || cancelled) return;
-      const data: Message[] = await res.json();
+      const data: ChatMessage[] = await res.json();
       if (!cancelled) setMessages(data);
     }
-    loadHistory();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealId]);
 
+  // Focus input when a contextRef arrives
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (contextRef) inputRef.current?.focus();
+  }, [contextRef]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -63,8 +86,8 @@ export function DealChat({
     setInput("");
     setStreaming(true);
 
-    const tempUserId = `tmp-${Date.now()}`;
-    const tempAsstId = `tmp-asst-${Date.now()}`;
+    const tempUserId = `tmp-u-${Date.now()}`;
+    const tempAsstId = `tmp-a-${Date.now()}`;
 
     setMessages((prev) => [
       ...prev,
@@ -87,7 +110,9 @@ export function DealChat({
       if (!res.ok || !res.body) {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === tempAsstId ? { ...m, content: "Error: could not reach the server." } : m,
+            m.id === tempAsstId
+              ? { ...m, content: "Error: could not reach the server." }
+              : m,
           ),
         );
         return;
@@ -96,6 +121,7 @@ export function DealChat({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let fullResponse = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -109,6 +135,7 @@ export function DealChat({
           try {
             const payload = JSON.parse(line.slice(6));
             if (payload.text) {
+              fullResponse += payload.text;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === tempAsstId
@@ -138,6 +165,10 @@ export function DealChat({
           }
         }
       }
+
+      if (fullResponse && onAssistantResponse) {
+        onAssistantResponse(fullResponse);
+      }
     } finally {
       setStreaming(false);
     }
@@ -151,66 +182,92 @@ export function DealChat({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScrollArea className="flex-1 pr-1">
-        <div className="space-y-4 p-1">
-          {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No messages yet. Ask a question to get started.
-            </p>
-          )}
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              {msg.role === "assistant" && (
-                <div className="mt-1 shrink-0 rounded-full bg-primary/10 p-1">
-                  <Bot className="h-3.5 w-3.5 text-primary" />
-                </div>
+    <div className="flex h-full flex-col min-h-0">
+      <MessageScrollerProvider>
+        <MessageScroller className="flex-1 min-h-0">
+          <MessageScrollerViewport>
+            <MessageScrollerContent className="px-2 py-4">
+              {messages.length === 0 && (
+                <Marker variant="separator">
+                  <MarkerContent>No messages yet — ask a question to start</MarkerContent>
+                </Marker>
               )}
-              <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                }`}
-              >
-                {msg.contextRef && (
-                  <p className="mb-1.5 text-xs italic opacity-70 border-l-2 border-current pl-2">
-                    &ldquo;{msg.contextRef.slice(0, 120)}
-                    {msg.contextRef.length > 120 ? "…" : ""}&rdquo;
-                  </p>
-                )}
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              </div>
-              {msg.role === "user" && (
-                <div className="mt-1 shrink-0 rounded-full bg-muted p-1">
-                  <User className="h-3.5 w-3.5" />
-                </div>
-              )}
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      </ScrollArea>
 
+              {messages.map((msg, i) => {
+                const isUser = msg.role === "user";
+                const isLastAssistant =
+                  !isUser &&
+                  i === messages.length - 1;
+
+                return (
+                  <MessageScrollerItem
+                    key={msg.id}
+                    scrollAnchor={isLastAssistant}
+                  >
+                    <Message align={isUser ? "end" : "start"}>
+                      {!isUser && (
+                        <MessageAvatar className="size-7 bg-primary/10 text-primary">
+                          <Bot className="size-4" />
+                        </MessageAvatar>
+                      )}
+                      <MessageContent>
+                        {msg.contextRef && (
+                          <Bubble variant="ghost" align={isUser ? "end" : "start"}>
+                            <BubbleContent className="text-xs italic text-muted-foreground border-l-2 border-muted-foreground/30 pl-2 py-1 !px-2 !rounded-none">
+                              &ldquo;{msg.contextRef.slice(0, 140)}
+                              {msg.contextRef.length > 140 ? "…" : ""}&rdquo;
+                            </BubbleContent>
+                          </Bubble>
+                        )}
+                        <Bubble
+                          variant={isUser ? "default" : "muted"}
+                          align={isUser ? "end" : "start"}
+                        >
+                          <BubbleContent>
+                            {msg.content || (
+                              <span className="inline-flex gap-1 items-center text-muted-foreground">
+                                <span className="animate-bounce delay-0">·</span>
+                                <span className="animate-bounce delay-100">·</span>
+                                <span className="animate-bounce delay-200">·</span>
+                              </span>
+                            )}
+                          </BubbleContent>
+                        </Bubble>
+                      </MessageContent>
+                      {isUser && (
+                        <MessageAvatar className="size-7 bg-muted">
+                          <User className="size-4" />
+                        </MessageAvatar>
+                      )}
+                    </Message>
+                  </MessageScrollerItem>
+                );
+              })}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton />
+        </MessageScroller>
+      </MessageScrollerProvider>
+
+      {/* Context reference pill */}
       {contextRef && (
-        <div className="mx-1 mb-2 flex items-start gap-2 rounded-md border bg-muted/50 px-3 py-2 text-xs">
+        <div className="mx-2 mb-2 flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
           <span className="flex-1 italic text-muted-foreground line-clamp-2">
             &ldquo;{contextRef}&rdquo;
           </span>
           <button
             onClick={onContextRefClear}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-muted-foreground hover:text-foreground leading-none mt-0.5"
           >
-            <X className="h-3.5 w-3.5" />
+            ✕
           </button>
         </div>
       )}
 
-      <div className="flex gap-2 pt-2 border-t mt-2">
+      {/* Input row */}
+      <div className="flex gap-2 pt-2 border-t">
         <Textarea
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -225,12 +282,9 @@ export function DealChat({
           disabled={streaming || !input.trim()}
           className="self-end"
         >
-          <Send className="h-4 w-4" />
+          <Send className="size-4" />
         </Button>
       </div>
-      {streaming && (
-        <p className="mt-1 text-xs text-muted-foreground">AI is thinking…</p>
-      )}
     </div>
   );
 }
