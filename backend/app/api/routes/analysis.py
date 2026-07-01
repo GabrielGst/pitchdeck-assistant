@@ -242,7 +242,7 @@ class DDAnswerIn(BaseModel):
     answer: str
 
 
-@router.patch("/{deal_id}/dd-questions/{question_id}", response_model=dict[str, bool])
+@router.patch("/{deal_id}/dd-questions/{question_id}/answer", response_model=dict[str, bool])
 async def update_dd_answer(
     deal_id: uuid.UUID,
     question_id: uuid.UUID,

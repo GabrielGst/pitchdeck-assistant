@@ -45,7 +45,7 @@ function DDQuestionRow({
     setSaving(true);
     try {
       const token = await getToken();
-      await fetch(`/api/analysis/${dealId}/dd-questions/${item.id}`, {
+      await fetch(`/api/analysis/${dealId}/dd-questions/${item.id}/answer`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ answer: value }),
