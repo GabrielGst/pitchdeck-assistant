@@ -74,7 +74,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: pitchdeck-frontend-vps:latest
+    image: ghcr.io/gabrielgst/pitchdeck-assistant/frontend:latest
     ports:
       - "127.0.0.1:3002:3000"
     environment:
